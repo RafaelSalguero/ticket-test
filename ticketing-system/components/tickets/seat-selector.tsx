@@ -144,23 +144,58 @@ export function SeatSelector({ eventId, sections, userId }: SeatSelectorProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* Section Selection */}
+        {/* Section Selection with Details */}
         <div className="mb-6">
-          <h3 className="font-semibold mb-3">Choose Section</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <h3 className="font-semibold mb-4">Choose Your Section</h3>
+          <div className="grid gap-4">
             {sections.map((section) => (
-              <Button
+              <div
                 key={section.id}
-                variant={selectedSection?.id === section.id ? 'default' : 'outline'}
                 onClick={() => {
-                  setSelectedSection(section)
-                  setSelectedSeats([])
-                  setError(null)
+                  if (section.available_seats > 0) {
+                    setSelectedSection(section)
+                    setSelectedSeats([])
+                    setError(null)
+                  }
                 }}
-                disabled={section.available_seats === 0}
+                className={`
+                  border-2 rounded-lg p-4 transition-all cursor-pointer
+                  ${selectedSection?.id === section.id 
+                    ? 'border-blue-500 bg-blue-50' 
+                    : section.available_seats === 0
+                    ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                    : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                  }
+                `}
               >
-                {section.section_name}
-              </Button>
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 className="font-semibold text-lg">{section.section_name}</h4>
+                    <p className="text-sm text-gray-600">
+                      {section.available_seats} of {section.total_seats} seats available
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-blue-600">
+                      {formatCurrency(section.price)}
+                    </p>
+                    <p className="text-xs text-gray-600">per seat</p>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all"
+                    style={{
+                      width: `${(section.available_seats / section.total_seats) * 100}%`,
+                    }}
+                  />
+                </div>
+                {selectedSection?.id === section.id && (
+                  <div className="mt-2 text-sm text-blue-600 font-medium">
+                    ✓ Selected
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
