@@ -12,10 +12,11 @@ Requirements:
 
 
 ## Ticket Sales:
-Web application for customers to browse events and purchase tickets.
+- Web application for customers to browse events and purchase tickets.
+- The ticket purchase flow should have a lock mechanish (don't use DB locks, but do use INSERT ON CONFLICT atomic operations) so that a user has a 5 minute window to buy a seat without other users able to grab that seat
 
 ## Customer Management:
-User authentication for ticket purchasers. (Simple password based)
+User authentication for ticket purchasers. (Simple password based, bcrypt stored in a simpe user table)
 Order history viewing for customers.
 Basic reporting on ticket sales and event attendance.
 
