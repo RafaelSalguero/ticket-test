@@ -163,3 +163,76 @@ export interface RevenueData {
   revenue: number;
   ticketsSold: number;
 }
+
+// Hook Return Types
+export interface UseSeatSelectionReturn {
+  selectedSection: SeatingSection | null;
+  availableSeats: Ticket[];
+  selectedSeats: string[];
+  loading: boolean;
+  reserving: boolean;
+  purchasing: boolean;
+  error: string | null;
+  reservedTicketIds: string[];
+  totalPrice: number;
+  reservedTotalPrice: number;
+  setSelectedSection: (section: SeatingSection | null) => void;
+  handleSeatToggle: (seatId: string) => void;
+  handleReserve: () => Promise<void>;
+  handlePurchase: () => Promise<void>;
+}
+
+export interface UseAuthFormReturn {
+  state: ApiResponse<{ userId: string }> | null;
+  isPending: boolean;
+  formAction: (formData: FormData) => void;
+}
+
+// View Component Props
+export interface SeatSelectorViewProps {
+  eventId: string;
+  sections: SeatingSection[];
+  selectedSection: SeatingSection | null;
+  availableSeats: Ticket[];
+  selectedSeats: string[];
+  loading: boolean;
+  reserving: boolean;
+  purchasing: boolean;
+  error: string | null;
+  reservedTicketIds: string[];
+  totalPrice: number;
+  reservedTotalPrice: number;
+  onSectionSelect: (section: SeatingSection) => void;
+  onSeatToggle: (seatId: string) => void;
+  onReserve: () => void;
+  onPurchase: () => void;
+}
+
+export interface LoginFormViewProps {
+  state: ApiResponse<{ userId: string }> | null;
+  isPending: boolean;
+  formAction: (formData: FormData) => void;
+}
+
+export interface RegisterFormViewProps {
+  state: ApiResponse<{ userId: string }> | null;
+  isPending: boolean;
+  formAction: (formData: FormData) => void;
+}
+
+export interface EventsListViewProps {
+  events: EventWithSections[];
+}
+
+export interface EventDetailViewProps {
+  event: EventWithSections;
+  user: User | null;
+}
+
+export interface OrdersListViewProps {
+  orders: OrderWithDetails[];
+}
+
+export interface OrderDetailViewProps {
+  order: OrderWithDetails;
+}
