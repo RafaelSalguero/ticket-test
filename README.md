@@ -1,3 +1,21 @@
+# Features
+
+- Ticket reservation and purchase
+- Admin event creation and reports
+- User login with bcrypt password hashing
+- Fully contained in docker, runs without any configuration, starts with example data
+
+# AI use
+Cline with Claude Sonnet 4.5 was used for aiding development, it was used by first writing precise instructions files and then running Claude in an agentic way
+
+Memory and progress files were used to track tasks while maintaining a small context size
+
+Almost all of the code was AI written, but some bugs required manual analysis to steer Claude in the correct direction
+
+# Prioritization
+I decided to prioritize both features and development time,
+the project was finished in about 8 hours of half-time work, probably 4 hours of total continous work.
+
 # Getting started
 
 Run the following commands:
