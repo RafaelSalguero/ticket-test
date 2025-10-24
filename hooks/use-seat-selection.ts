@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { getAllSeats, reserveTickets, purchaseTickets } from '@/actions/ticket-actions'
+import { getAllSeats, reserveTickets, purchaseTickets, cancelReservation } from '@/actions/ticket-actions'
 import type { SeatingSectionWithAvailability, Ticket, UseSeatSelectionReturn } from '@/types'
 
 /**
@@ -12,11 +12,11 @@ function buildSeatStatusMap(seats: Ticket[]): Map<string, Ticket['status']> {
   const statusMap = new Map<string, Ticket['status']>()
   
   for (const seat of seats) {
-    // Check if reservation has expired (>5 minutes old)
+    // Check if reservation has expired (>10 seconds old)
     const isExpiredReservation = 
       seat.status === 'reserved' && 
       seat.reserved_at && 
-      new Date(seat.reserved_at).getTime() < Date.now() - 5 * 60 * 1000
+      new Date(seat.reserved_at).getTime() < Date.now() - 10 * 1000
     
     // Treat expired reservations as available
     statusMap.set(seat.id, isExpiredReservation ? 'available' : seat.status)
@@ -41,8 +41,15 @@ export function useSeatSelection(
   const [loading, setLoading] = useState(false)
   const [reserving, setReserving] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
+  const [canceling, setCanceling] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reservedTicketIds, setReservedTicketIds] = useState<string[]>([])
+  const [reservationExpiresAt, setReservationExpiresAt] = useState<Date | null>(null)
+  const [partialReservation, setPartialReservation] = useState<{
+    requested: number
+    reserved: number
+    failedSeats: string[]
+  } | null>(null)
 
   // Load all seats when section is selected
   useEffect(() => {
@@ -93,29 +100,55 @@ export function useSeatSelection(
       return
     }
 
+    const requestedSeats = [...selectedSeats]
     setReserving(true)
     setError(null)
+    setPartialReservation(null)
 
     try {
       const result = await reserveTickets(selectedSeats, userId)
 
       if (result.success && result.data) {
-        setReservedTicketIds(result.data)
-        setSelectedSeats([])
+        const reservedIds = result.data
+        setReservedTicketIds(reservedIds)
+        
+        // Set expiration time (10 seconds from now)
+        const expiresAt = new Date(Date.now() + 10 * 1000)
+        setReservationExpiresAt(expiresAt)
 
-        if (result.error) {
-          setError(result.error)
+        // Check if partial reservation occurred
+        if (reservedIds.length < requestedSeats.length) {
+          // Find which seats failed to reserve
+          const failedSeatIds = requestedSeats.filter(id => !reservedIds.includes(id))
+          const failedSeatNumbers = failedSeatIds
+            .map(id => allSeats.find(seat => seat.id === id)?.seat_number)
+            .filter((num): num is string => num !== undefined)
+
+          setPartialReservation({
+            requested: requestedSeats.length,
+            reserved: reservedIds.length,
+            failedSeats: failedSeatNumbers,
+          })
+
+          // Unselect the failed seats
+          setSelectedSeats([])
         } else {
-          // Start 5-minute countdown
-          setTimeout(() => {
-            setReservedTicketIds([])
-            if (selectedSection) {
-              loadAllSeatsAsync(selectedSection.id)
-            }
-          }, 5 * 60 * 1000)
+          // Full success - clear selection
+          setSelectedSeats([])
+          setPartialReservation(null)
         }
 
-        // Refresh all seats
+        // Start 10-second countdown
+        setTimeout(() => {
+          setReservedTicketIds([])
+          setReservationExpiresAt(null)
+          setPartialReservation(null)
+          if (selectedSection) {
+            loadAllSeatsAsync(selectedSection.id)
+          }
+        }, 10 * 1000)
+
+        // Refresh all seats to show updated status
         if (selectedSection) {
           await loadAllSeatsAsync(selectedSection.id)
         }
@@ -155,6 +188,39 @@ export function useSeatSelection(
     }
   }
 
+  const handleCancelReservation = async () => {
+    if (reservedTicketIds.length === 0) {
+      setError('No reservation to cancel')
+      return
+    }
+
+    setCanceling(true)
+    setError(null)
+
+    try {
+      const result = await cancelReservation(reservedTicketIds, userId)
+
+      if (result.success) {
+        // Clear reservation state
+        setReservedTicketIds([])
+        setReservationExpiresAt(null)
+        setPartialReservation(null)
+
+        // Refresh seats to show updated availability
+        if (selectedSection) {
+          await loadAllSeatsAsync(selectedSection.id)
+        }
+      } else {
+        setError(result.error || 'Failed to cancel reservation')
+      }
+    } catch (err) {
+      setError('An error occurred while canceling reservation')
+      console.error(err)
+    } finally {
+      setCanceling(false)
+    }
+  }
+
   const totalPrice = selectedSection
     ? selectedSeats.length * selectedSection.price
     : 0
@@ -172,13 +238,17 @@ export function useSeatSelection(
     loading,
     reserving,
     purchasing,
+    canceling,
     error,
     reservedTicketIds,
+    reservationExpiresAt,
+    partialReservation,
     totalPrice,
     reservedTotalPrice,
     setSelectedSection,
     handleSeatToggle,
     handleReserve,
     handlePurchase,
+    handleCancelReservation,
   }
 }

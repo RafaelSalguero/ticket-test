@@ -83,7 +83,7 @@ export async function reserveTickets(
              status = 'reserved',
              reserved_at = NOW()
            WHERE tickets.user_id IS NULL 
-              OR tickets.reserved_at < NOW() - INTERVAL '5 minutes'
+              OR tickets.reserved_at < NOW() - INTERVAL '10 seconds'
            RETURNING *`,
           [ticket.event_id, ticket.section_id, ticket.seat_number, userId]
         )
@@ -166,7 +166,7 @@ export async function purchaseTickets(
         if (ticket.status !== 'reserved') {
           throw new Error('Some tickets are no longer reserved')
         }
-        if (ticket.reserved_at && ticket.reserved_at < new Date(Date.now() - 5 * 60 * 1000)) {
+        if (ticket.reserved_at && ticket.reserved_at < new Date(Date.now() - 10 * 1000)) {
           throw new Error('Your reservation has expired')
         }
       }
@@ -215,6 +215,68 @@ export async function purchaseTickets(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to purchase tickets',
+    }
+  }
+}
+
+export async function cancelReservation(
+  ticketIds: string[],
+  userId: string
+): Promise<ApiResponse<void>> {
+  try {
+    const user = await requireAuth()
+
+    if (user.id !== userId) {
+      return {
+        success: false,
+        error: 'Unauthorized',
+      }
+    }
+
+    if (ticketIds.length === 0) {
+      return {
+        success: false,
+        error: 'No tickets to cancel',
+      }
+    }
+
+    await transaction(async (client) => {
+      // Verify all tickets are owned by this user and are reserved
+      const ticketsResult = await client.query<Ticket>(
+        'SELECT * FROM tickets WHERE id = ANY($1)',
+        [ticketIds]
+      )
+
+      const tickets = ticketsResult.rows
+
+      for (const ticket of tickets) {
+        if (ticket.user_id !== userId) {
+          throw new Error('You do not own all selected tickets')
+        }
+        if (ticket.status !== 'reserved') {
+          throw new Error('Some tickets are not reserved')
+        }
+      }
+
+      // Release the tickets back to available status
+      await client.query(
+        `UPDATE tickets 
+         SET user_id = NULL, status = 'available', reserved_at = NULL
+         WHERE id = ANY($1)`,
+        [ticketIds]
+      )
+    })
+
+    revalidatePath(`/events`)
+
+    return {
+      success: true,
+    }
+  } catch (error) {
+    console.error('Error canceling reservation:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to cancel reservation',
     }
   }
 }

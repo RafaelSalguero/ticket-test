@@ -9,12 +9,6 @@ ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'customer';
 ALTER TABLE users
 ADD CONSTRAINT users_role_check CHECK (role IN ('customer', 'admin'));
 
--- Set admin role for the admin user (admin@venue.com)
--- This user was created in the seed data migration
-UPDATE users 
-SET role = 'admin' 
-WHERE email = 'admin@venue.com';
-
 -- Create index on role column for faster queries
 CREATE INDEX idx_users_role ON users(role);
 

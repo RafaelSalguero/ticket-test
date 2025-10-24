@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ReservationTimer } from '@/components/ui/reservation-timer'
 import { formatCurrency } from '@/lib/utils'
 import type { SeatSelectorViewProps, Ticket } from '@/types'
 
@@ -18,14 +19,18 @@ export function SeatSelectorView({
   loading,
   reserving,
   purchasing,
+  canceling,
   error,
   reservedTicketIds,
+  reservationExpiresAt,
+  partialReservation,
   totalPrice,
   reservedTotalPrice,
   onSectionSelect,
   onSeatToggle,
   onReserve,
   onPurchase,
+  onCancelReservation,
 }: SeatSelectorViewProps) {
   return (
     <Card>
@@ -165,25 +170,126 @@ export function SeatSelectorView({
               </div>
             )}
 
-            {/* Reserved Tickets */}
-            {reservedTicketIds.length > 0 && (
-              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-200">
-                <p className="font-semibold text-green-800 mb-2">
-                  ✓ Reserved: {reservedTicketIds.length} seat(s)
+            {/* Reserved Tickets - Partial Reservation Warning */}
+            {reservedTicketIds.length > 0 && partialReservation && (
+              <div className="bg-orange-50 p-4 rounded-lg border-2 border-orange-300 mb-4">
+                <div className="flex items-start gap-2 mb-3">
+                  <span className="text-2xl">⚠️</span>
+                  <div className="flex-1">
+                    <p className="font-bold text-orange-900 text-lg mb-1">
+                      PARTIAL RESERVATION
+                    </p>
+                    <p className="text-orange-800 mb-2">
+                      Requested: {partialReservation.requested} seats | 
+                      Reserved: {partialReservation.reserved} seats
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-green-800">
+                      ✓ Successfully Reserved:
+                    </p>
+                    <p className="text-sm text-green-700">
+                      Seats {
+                        reservedTicketIds
+                          .map(id => allSeats.find(seat => seat.id === id)?.seat_number)
+                          .filter((num): num is string => num !== undefined)
+                          .sort((a, b) => parseInt(a) - parseInt(b))
+                          .join(', ')
+                      }
+                    </p>
+                  </div>
+
+                  {partialReservation.failedSeats.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold text-red-800">
+                        ✗ Unable to Reserve:
+                      </p>
+                      <p className="text-sm text-red-700">
+                        Seats {partialReservation.failedSeats.sort((a, b) => parseInt(a) - parseInt(b)).join(', ')} (already taken)
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {reservationExpiresAt && (
+                  <div className="mb-3">
+                    <ReservationTimer expiresAt={reservationExpiresAt} />
+                  </div>
+                )}
+
+                <p className="text-2xl font-bold text-orange-900 mb-4">
+                  Total: {formatCurrency(reservedTotalPrice)}
+                </p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={onCancelReservation}
+                    disabled={canceling}
+                    variant="outline"
+                    className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                  >
+                    {canceling ? 'Canceling...' : 'Cancel'}
+                  </Button>
+                  <Button
+                    onClick={onPurchase}
+                    disabled={purchasing}
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    {purchasing ? 'Processing...' : `Purchase (${formatCurrency(reservedTotalPrice)})`}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Reserved Tickets - Full Success */}
+            {reservedTicketIds.length > 0 && !partialReservation && (
+              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-200 mb-4">
+                <p className="font-bold text-green-800 text-lg mb-2">
+                  ✓ RESERVATION CONFIRMED
                 </p>
                 <p className="text-sm text-green-700 mb-2">
-                  Your reservation will expire in 5 minutes
+                  Reserved: {reservedTicketIds.length} seats
                 </p>
+                <p className="text-sm text-green-700 mb-3">
+                  Seats {
+                    reservedTicketIds
+                      .map(id => allSeats.find(seat => seat.id === id)?.seat_number)
+                      .filter((num): num is string => num !== undefined)
+                      .sort((a, b) => parseInt(a) - parseInt(b))
+                      .join(', ')
+                  }
+                </p>
+
+                {reservationExpiresAt && (
+                  <div className="mb-3">
+                    <ReservationTimer expiresAt={reservationExpiresAt} />
+                  </div>
+                )}
+
                 <p className="text-2xl font-bold text-green-800 mb-4">
                   Total: {formatCurrency(reservedTotalPrice)}
                 </p>
-                <Button
-                  onClick={onPurchase}
-                  disabled={purchasing}
-                  className="w-full bg-green-600 hover:bg-green-700"
-                >
-                  {purchasing ? 'Processing...' : 'Complete Purchase'}
-                </Button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={onCancelReservation}
+                    disabled={canceling}
+                    variant="outline"
+                    className="border-green-300 text-green-700 hover:bg-green-100"
+                  >
+                    {canceling ? 'Canceling...' : 'Cancel'}
+                  </Button>
+                  <Button
+                    onClick={onPurchase}
+                    disabled={purchasing}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {purchasing ? 'Processing...' : `Purchase (${formatCurrency(reservedTotalPrice)})`}
+                  </Button>
+                </div>
               </div>
             )}
           </>

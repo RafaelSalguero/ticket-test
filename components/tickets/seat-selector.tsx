@@ -23,14 +23,18 @@ export function SeatSelector({ eventId, sections, userId }: SeatSelectorProps) {
     loading,
     reserving,
     purchasing,
+    canceling,
     error,
     reservedTicketIds,
+    reservationExpiresAt,
+    partialReservation,
     totalPrice,
     reservedTotalPrice,
     setSelectedSection,
     handleSeatToggle,
     handleReserve,
     handlePurchase,
+    handleCancelReservation,
   } = useSeatSelection(eventId, userId)
 
   return (
@@ -44,14 +48,18 @@ export function SeatSelector({ eventId, sections, userId }: SeatSelectorProps) {
       loading={loading}
       reserving={reserving}
       purchasing={purchasing}
+      canceling={canceling}
       error={error}
       reservedTicketIds={reservedTicketIds}
+      reservationExpiresAt={reservationExpiresAt}
+      partialReservation={partialReservation}
       totalPrice={totalPrice}
       reservedTotalPrice={reservedTotalPrice}
       onSectionSelect={setSelectedSection}
       onSeatToggle={handleSeatToggle}
       onReserve={handleReserve}
       onPurchase={handlePurchase}
+      onCancelReservation={handleCancelReservation}
     />
   )
 }

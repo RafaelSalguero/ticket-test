@@ -185,14 +185,22 @@ export interface UseSeatSelectionReturn {
   loading: boolean;
   reserving: boolean;
   purchasing: boolean;
+  canceling: boolean;
   error: string | null;
   reservedTicketIds: string[];
+  reservationExpiresAt: Date | null;
+  partialReservation: {
+    requested: number;
+    reserved: number;
+    failedSeats: string[];
+  } | null;
   totalPrice: number;
   reservedTotalPrice: number;
   setSelectedSection: (section: SeatingSectionWithAvailability | null) => void;
   handleSeatToggle: (seatId: string) => void;
   handleReserve: () => Promise<void>;
   handlePurchase: () => Promise<void>;
+  handleCancelReservation: () => Promise<void>;
 }
 
 export interface UseAuthFormReturn {
@@ -212,14 +220,22 @@ export interface SeatSelectorViewProps {
   loading: boolean;
   reserving: boolean;
   purchasing: boolean;
+  canceling: boolean;
   error: string | null;
   reservedTicketIds: string[];
+  reservationExpiresAt: Date | null;
+  partialReservation: {
+    requested: number;
+    reserved: number;
+    failedSeats: string[];
+  } | null;
   totalPrice: number;
   reservedTotalPrice: number;
   onSectionSelect: (section: SeatingSectionWithAvailability) => void;
   onSeatToggle: (seatId: string) => void;
   onReserve: () => void;
   onPurchase: () => void;
+  onCancelReservation: () => void;
 }
 
 export interface LoginFormViewProps {

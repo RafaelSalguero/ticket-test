@@ -2,11 +2,12 @@
 -- This creates demo data for immediate testing
 
 -- 1. Create demo users with plain text passwords (will be verified by auth logic)
-INSERT INTO users (email, password_hash, first_name, last_name)
+-- Note: role column is added in migration 009, so it will be available when this runs
+INSERT INTO users (email, password_hash, first_name, last_name, role)
 VALUES 
-  ('admin@venue.com', 'Admin123!', 'Admin', 'User'),
-  ('demo@example.com', 'Demo123!', 'Demo', 'Customer'),
-  ('test@example.com', 'Test123!', 'Test', 'User')
+  ('admin@venue.com', 'Admin123!', 'Admin', 'User', 'admin'),
+  ('demo@example.com', 'Demo123!', 'Demo', 'Customer', 'customer'),
+  ('test@example.com', 'Test123!', 'Test', 'User', 'customer')
 ON CONFLICT (email) DO NOTHING;
 
 -- 2. Create demo events
