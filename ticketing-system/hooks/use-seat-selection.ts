@@ -31,7 +31,6 @@ function buildSeatStatusMap(seats: Ticket[]): Map<string, Ticket['status']> {
  */
 export function useSeatSelection(
   eventId: string,
-  sections: SeatingSectionWithAvailability[],
   userId: string
 ): UseSeatSelectionReturn {
   const router = useRouter()

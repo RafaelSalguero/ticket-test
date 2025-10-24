@@ -2,11 +2,11 @@
 
 import { useSeatSelection } from '@/hooks/use-seat-selection'
 import { SeatSelectorView } from '@/components/tickets/seat-selector-view'
-import type { SeatingSection } from '@/types'
+import { SeatingSectionWithAvailability } from '@/types'
 
 interface SeatSelectorProps {
   eventId: string
-  sections: SeatingSection[]
+  sections: SeatingSectionWithAvailability[]
   userId: string
 }
 
@@ -31,7 +31,7 @@ export function SeatSelector({ eventId, sections, userId }: SeatSelectorProps) {
     handleSeatToggle,
     handleReserve,
     handlePurchase,
-  } = useSeatSelection(eventId, sections, userId)
+  } = useSeatSelection(eventId, userId)
 
   return (
     <SeatSelectorView

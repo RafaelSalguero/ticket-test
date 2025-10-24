@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { query, transaction } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { requireAdmin } from '@/lib/admin-auth'
 import { generateSeatNumbers } from '@/lib/utils'
 import { enrichSectionsWithAvailability } from '@/lib/seat-calculations'
 import type { ApiResponse, Event, EventWithSections, SeatingSection } from '@/types'
@@ -153,9 +154,62 @@ export async function createEvent(
   }
 }
 
+export async function updateEvent(
+  eventId: string,
+  prevState: ApiResponse<Event> | null,
+  formData: FormData
+): Promise<ApiResponse<Event>> {
+  try {
+    await requireAdmin()
+
+    const name = formData.get('name') as string
+    const description = formData.get('description') as string
+    const eventDate = formData.get('eventDate') as string
+    const eventTime = formData.get('eventTime') as string
+    const venue = formData.get('venue') as string
+
+    if (!name || !description || !eventDate || !eventTime || !venue) {
+      return {
+        success: false,
+        error: 'All event fields are required',
+      }
+    }
+
+    const result = await query<Event>(
+      `UPDATE events 
+       SET name = $1, description = $2, event_date = $3, event_time = $4, venue = $5, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $6
+       RETURNING *`,
+      [name, description, eventDate, eventTime, venue, eventId]
+    )
+
+    if (result.rows.length === 0) {
+      return {
+        success: false,
+        error: 'Event not found',
+      }
+    }
+
+    revalidatePath('/')
+    revalidatePath('/events')
+    revalidatePath(`/events/${eventId}`)
+
+    return {
+      success: true,
+      data: result.rows[0],
+    }
+  } catch (error) {
+    console.error('Error updating event:', error)
+    return {
+      success: false,
+      error: 'Failed to update event',
+    }
+  }
+}
+
 export async function deleteEvent(eventId: string): Promise<ApiResponse<void>> {
   try {
-    await requireAuth()
+    await requireAdmin()
 
     await query('DELETE FROM events WHERE id = $1', [eventId])
 

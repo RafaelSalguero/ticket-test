@@ -5,6 +5,7 @@ export interface User {
   password_hash: string;
   first_name: string;
   last_name: string;
+  role: 'customer' | 'admin';
   created_at: Date;
   updated_at: Date;
 }
@@ -85,6 +86,14 @@ export interface EventFormData {
   eventTime: string;
   venue: string;
   sections: SectionFormData[];
+}
+
+export interface EventEditFormData {
+  name: string;
+  description: string;
+  eventDate: string;
+  eventTime: string;
+  venue: string;
 }
 
 export interface SectionFormData {

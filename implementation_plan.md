@@ -1,278 +1,207 @@
-# Implementation Plan: Remove Calculated Fields from Database
+# Implementation Plan: Admin Features and Reports
 
 ## [Overview]
-Remove the `available_seats` column from the `seating_sections` table and replace all references with dynamic queries that calculate available seats from the `tickets` table based on ticket status.
+Implement admin role system with event management capabilities and simple read-only reports for the ticketing system.
 
-This refactoring eliminates data redundancy and potential inconsistencies by making the tickets table the single source of truth for seat availability. The change affects database migrations, TypeScript types, server actions, and UI components that display or depend on available seat counts.
+This implementation adds a role-based access control system to distinguish admin users from regular customers. Admin users will have access to event management features (create, edit, delete events) and view reports (sales, attendance, revenue). The reports will be simple list views without PDF generation. The implementation leverages existing server actions where possible and follows established patterns in the codebase.
 
 ## [Types]
-Modify TypeScript interfaces to reflect the removal of the calculated field from database models.
+Add role support and update existing admin types for proper implementation.
 
-**Modifications to `ticketing-system/types/index.ts`:**
+**Update User interface in `types/index.ts`:**
+```typescript
+export interface User {
+  id: string;
+  email: string;
+  password_hash: string;
+  first_name: string;
+  last_name: string;
+  role: 'customer' | 'admin';  // ADD THIS LINE
+  created_at: Date;
+  updated_at: Date;
+}
+```
 
-1. Remove `available_seats` from the `SeatingSection` interface:
-   ```typescript
-   export interface SeatingSection {
-     id: string;
-     event_id: string;
-     section_name: string;
-     price: number;
-     total_seats: number;
-     // REMOVE: available_seats: number;
-     created_at: Date;
-   }
-   ```
+**Admin report types already exist** and are well-defined:
+- `SalesReport` - total revenue, tickets sold, event count, recent orders
+- `AttendanceReport` - per-event stats with seats sold/available
+- `RevenueData` - revenue and tickets sold per event
 
-2. Create a new interface for sections with calculated available seats (used in application code):
-   ```typescript
-   export interface SeatingSecti onWithAvailability extends SeatingSection {
-     available_seats: number;
-   }
-   ```
-
-3. Update `EventWithSections` to use the new interface:
-   ```typescript
-   export interface EventWithSections extends Event {
-     sections: SeatingSectionWithAvailability[];
-   }
-   ```
+**Add new form type for event editing:**
+```typescript
+export interface EventEditFormData {
+  name: string;
+  description: string;
+  eventDate: string;
+  eventTime: string;
+  venue: string;
+}
+```
 
 ## [Files]
-Database migrations, seed data, type definitions, server actions, and UI components require updates to remove or calculate available_seats.
-
-**Files to Modify:**
-
-1. **ticketing-system/migrations/003_create_seating_sections_table.sql**
-   - Remove `available_seats` column definition
-   - Remove `chk_available_seats` constraint
-
-2. **ticketing-system/migrations/007_seed_data.sql**
-   - Remove `available_seats` from INSERT statements for seating sections
-
-3. **ticketing-system/setup-test-data.sql**
-   - Remove `available_seats` from INSERT statements for seating sections
-
-4. **ticketing-system/types/index.ts**
-   - Remove `available_seats` from `SeatingSection` interface
-   - Add new `SeatingSectionWithAvailability` interface
-   - Update `EventWithSections` to use new interface
-
-5. **ticketing-system/actions/event-actions.ts**
-   - Remove `available_seats` from section INSERT statements
-   - Add helper function to calculate available seats
-   - Update queries to calculate and include available_seats in results
-
-6. **ticketing-system/actions/ticket-actions.ts**
-   - Remove the UPDATE statement that decrements `available_seats`
-   - Add logic to calculate available seats where needed
-
-7. **ticketing-system/components/tickets/seat-selector-view.tsx**
-   - No changes needed (receives calculated data from parent)
-
-8. **ticketing-system/components/events/events-list-view.tsx**
-   - No changes needed (receives calculated data from loader)
-
-9. **ticketing-system/actions/order-actions.ts**
-   - Remove hardcoded `available_seats: 0`
-   - Add calculation for available seats if needed
+Database migrations, new admin pages, components, and server actions.
 
 **New Files to Create:**
 
-1. **ticketing-system/migrations/008_remove_available_seats.sql**
-   - Migration to drop the `available_seats` column
-   - Drop the `chk_available_seats` constraint
+1. **Database Migration:**
+   - `ticketing-system/migrations/009_add_user_roles.sql` - Add role column to users table
 
-2. **ticketing-system/lib/seat-calculations.ts**
-   - Helper functions for calculating available seats
-   - Centralized query logic for seat availability
+2. **Server Actions:**
+   - `ticketing-system/actions/admin-actions.ts` - Report generation actions
+
+3. **Admin Pages:**
+   - `ticketing-system/app/admin/page.tsx` - Admin dashboard
+   - `ticketing-system/app/admin/events/page.tsx` - Event management
+   - `ticketing-system/app/admin/events/create/page.tsx` - Create event form
+   - `ticketing-system/app/admin/events/[id]/edit/page.tsx` - Edit event form
+   - `ticketing-system/app/admin/reports/page.tsx` - Reports view
+
+4. **Components:**
+   - `ticketing-system/components/admin/admin-dashboard-view.tsx` - Dashboard UI
+   - `ticketing-system/components/admin/event-form-view.tsx` - Event create/edit form
+   - `ticketing-system/components/admin/events-management-view.tsx` - Events list with actions
+   - `ticketing-system/components/admin/reports-view.tsx` - Reports display
+
+5. **Library Utilities:**
+   - `ticketing-system/lib/admin-auth.ts` - Admin authorization helpers
+
+**Files to Modify:**
+
+1. `ticketing-system/types/index.ts` - Add role to User interface, add EventEditFormData
+2. `ticketing-system/components/navigation/navbar.tsx` - Add admin link
+3. `ticketing-system/actions/event-actions.ts` - Add updateEvent action
+4. `ticketing-system/migrations/007_seed_data.sql` - Update to set admin role for admin@venue.com
 
 ## [Functions]
-Create new helper functions for seat calculations and update existing functions to remove available_seats references.
+New and modified functions for admin functionality.
 
-**New Functions:**
+**New Functions in `lib/admin-auth.ts`:**
+- `requireAdmin()` - Verify user is logged in and has admin role, throw error if not
+- `isAdmin(user: User | null)` - Check if user has admin role, return boolean
 
-1. **`calculateAvailableSeats(sectionId: string): Promise<number>`** in `lib/seat-calculations.ts`
-   - Purpose: Query tickets table to count available seats for a section
-   - Query: `SELECT COUNT(*) FROM tickets WHERE section_id = $1 AND status = 'available'`
-   - Returns: Number of available seats
+**New Functions in `actions/admin-actions.ts`:**
+- `getSalesReport()` - Generate overall sales statistics
+- `getEventAttendanceReport(eventId?: string)` - Get attendance stats for events
+- `getRevenueByEvent()` - Calculate revenue per event
 
-2. **`calculateAvailableSeatsBulk(sectionIds: string[]): Promise<Map<string, number>>`** in `lib/seat-calculations.ts`
-   - Purpose: Efficiently calculate available seats for multiple sections
-   - Query: `SELECT section_id, COUNT(*) FROM tickets WHERE section_id = ANY($1) AND status = 'available' GROUP BY section_id`
-   - Returns: Map of section_id to available seat count
+**New Function in `actions/event-actions.ts`:**
+- `updateEvent(eventId, formData)` - Update existing event details (name, description, date, time, venue)
 
-3. **`enrichSectionsWithAvailability(sections: SeatingSection[]): Promise<SeatingSectionWithAvailability[]>`** in `lib/seat-calculations.ts`
-   - Purpose: Add available_seats to section objects
-   - Uses `calculateAvailableSeatsBulk` for efficiency
-   - Returns: Sections with calculated available_seats
-
-**Modified Functions:**
-
-1. **`createEvent`** in `actions/event-actions.ts`
-   - File: ticketing-system/actions/event-actions.ts
-   - Change: Remove `available_seats` from INSERT statement
-   - Before: `INSERT INTO seating_sections (event_id, section_name, price, total_seats, available_seats) VALUES (..., $4, $4)`
-   - After: `INSERT INTO seating_sections (event_id, section_name, price, total_seats) VALUES (..., $4)`
-
-2. **`getEvents`** in `actions/event-actions.ts`
-   - File: ticketing-system/actions/event-actions.ts
-   - Change: Use `enrichSectionsWithAvailability` to calculate available seats
-   - Add import: `import { enrichSectionsWithAvailability } from '@/lib/seat-calculations'`
-   - After fetching sections: `sections: await enrichSectionsWithAvailability(sectionsResult.rows)`
-
-3. **`getEventById`** in `actions/event-actions.ts`
-   - File: ticketing-system/actions/event-actions.ts
-   - Change: Use `enrichSectionsWithAvailability` to calculate available seats
-   - After fetching sections: `sections: await enrichSectionsWithAvailability(sectionsResult.rows)`
-
-4. **`getUpcomingEvents`** in `actions/event-actions.ts`
-   - File: ticketing-system/actions/event-actions.ts
-   - Change: Use `enrichSectionsWithAvailability` to calculate available seats
-   - After fetching sections: `sections: await enrichSectionsWithAvailability(sectionsResult.rows)`
-
-5. **`purchaseTickets`** in `actions/ticket-actions.ts`
-   - File: ticketing-system/actions/ticket-actions.ts
-   - Change: Remove the UPDATE statement that decrements available_seats
-   - Remove this block:
-     ```typescript
-     // Update available seats count
-     for (const ticket of tickets) {
-       await client.query(
-         `UPDATE seating_sections 
-          SET available_seats = available_seats - 1
-          WHERE id = $1`,
-         [ticket.section_id]
-       )
-     }
-     ```
-
-6. **`getOrderById`** in `actions/order-actions.ts`
-   - File: ticketing-system/actions/order-actions.ts
-   - Change: Remove hardcoded `available_seats: 0` from section object
-   - Consider if available_seats is needed in order details (likely not needed)
+**Existing Functions (no changes needed):**
+- `createEvent()` - Already exists and works
+- `deleteEvent()` - Already exists and works
+- `getEvents()` - Already exists and works
+- `getEventById()` - Already exists and works
 
 ## [Classes]
-No class modifications required. This project uses functional components and server actions rather than class-based architecture.
+No new classes required. Implementation uses React Server Components and functional patterns.
+
+The codebase follows a functional programming approach with:
+- React Server Components for pages
+- Server Actions for data mutations
+- Functional view components for UI
+- No class-based components needed
 
 ## [Dependencies]
-No new external dependencies required. All changes use existing PostgreSQL queries and TypeScript functionality.
+No new dependencies required. All functionality uses existing packages.
+
+**Existing Dependencies Sufficient:**
+- Next.js 16 - Server Actions and App Router
+- React 19 - Server/Client Components
+- PostgreSQL via `pg` - Database queries
+- bcrypt - Already installed for auth
+- Tailwind CSS + shadcn/ui - UI components
+- TypeScript 5 - Type safety
+
+The implementation leverages established patterns and libraries already in use throughout the project.
 
 ## [Testing]
-Ensure data integrity and correct calculation of available seats across all features.
+Manual testing approach with specific test scenarios for admin features.
 
-**Test Modifications:**
+**Test Scenarios:**
 
-1. **Migration Testing**
-   - Run migration 008 on test database
-   - Verify `available_seats` column is dropped
-   - Verify existing data remains intact
-   - Test rollback scenario if needed
+1. **Admin Role Assignment:**
+   - Run migration 009 to add role column
+   - Verify admin@venue.com has 'admin' role
+   - Verify demo@example.com has 'customer' role
+   - Test login with both accounts
 
-2. **Unit Tests for Seat Calculations**
-   - Test `calculateAvailableSeats` with various ticket statuses
-   - Test `calculateAvailableSeatsBulk` with multiple sections
-   - Test edge cases: no tickets, all sold, all reserved
+2. **Admin Authorization:**
+   - Login as admin user - should see "Admin" link in navbar
+   - Login as customer - should NOT see "Admin" link
+   - Try accessing /admin as customer - should redirect or show error
+   - Try accessing /admin as admin - should work
 
-3. **Integration Tests**
-   - Test event creation without available_seats
-   - Test ticket purchase flow calculates correctly
-   - Test event listing shows correct availability
-   - Test seat selector shows correct available seats
-   - Test reservation expiration doesn't affect calculation
+3. **Event Management:**
+   - Create new event with sections
+   - Verify tickets are auto-generated
+   - Edit existing event details
+   - Delete event (verify cascading deletes)
 
-4. **Data Integrity Tests**
-   - Compare old available_seats values with calculated values before migration
-   - Verify counts match after migration
-   - Test that multiple concurrent purchases don't cause issues
+4. **Reports:**
+   - Generate sales report - verify totals
+   - View attendance report - verify calculations
+   - Check revenue by event - verify amounts match orders
 
-5. **Performance Testing**
-   - Measure query performance for `enrichSectionsWithAvailability`
-   - Test with large numbers of events and sections
-   - Ensure bulk calculation is more efficient than individual queries
+5. **Integration:**
+   - Create event as admin
+   - Purchase tickets as customer
+   - View reports as admin - verify purchase appears
+   - Verify navbar updates based on user role
 
-**Manual Testing Checklist:**
-- [ ] View events list and verify seat counts
-- [ ] Open event detail page and verify section availability
-- [ ] Select seats and verify counts update correctly
-- [ ] Reserve tickets and verify availability decreases
-- [ ] Purchase tickets and verify availability decreases
-- [ ] Let reservation expire and verify availability increases
-- [ ] Create new event and verify initial availability equals total_seats
-- [ ] Test concurrent purchases (open event in two browsers)
+**Manual Test Checklist:**
+- [ ] Migration runs successfully
+- [ ] Admin auth helpers work correctly
+- [ ] Admin pages render without errors
+- [ ] Event CRUD operations function properly
+- [ ] Reports display accurate data
+- [ ] Regular users cannot access admin pages
+- [ ] Admin users can access all admin features
 
 ## [Implementation Order]
-Follow this sequence to minimize breaking changes and ensure safe deployment.
+Sequential steps to minimize conflicts and ensure successful integration.
 
-1. **Create Helper Functions**
-   - Create `ticketing-system/lib/seat-calculations.ts`
-   - Implement `calculateAvailableSeats`
-   - Implement `calculateAvailableSeatsBulk`
-   - Implement `enrichSectionsWithAvailability`
-   - Add unit tests for helper functions
+1. **Database & Type Updates** (Foundation)
+   - Create and run migration 009_add_user_roles.sql
+   - Update User interface in types/index.ts
+   - Update seed data migration to set admin role
+   - Test database changes
 
-2. **Update TypeScript Types**
-   - Modify `ticketing-system/types/index.ts`
-   - Add `SeatingSectionWithAvailability` interface
-   - Update `EventWithSections` interface
-   - Keep `SeatingSection` with `available_seats` temporarily for compatibility
+2. **Admin Authorization** (Security Layer)
+   - Create lib/admin-auth.ts with requireAdmin() and isAdmin()
+   - Test auth helpers with existing users
 
-3. **Update Event Actions**
-   - Modify `ticketing-system/actions/event-actions.ts`
-   - Update `getEvents` to use `enrichSectionsWithAvailability`
-   - Update `getEventById` to use `enrichSectionsWithAvailability`
-   - Update `getUpcomingEvents` to use `enrichSectionsWithAvailability`
-   - Keep `createEvent` INSERT with available_seats for now
+3. **Admin Server Actions** (Business Logic)
+   - Add updateEvent() to actions/event-actions.ts
+   - Create actions/admin-actions.ts with report functions
+   - Test server actions in isolation
 
-4. **Update Ticket Actions**
-   - Modify `ticketing-system/actions/ticket-actions.ts`
-   - Remove the UPDATE statement from `purchaseTickets` that decrements available_seats
-   - Test purchase flow still works correctly
+4. **Admin Components** (UI Layer)
+   - Create components/admin/event-form-view.tsx (reusable for create/edit)
+   - Create components/admin/events-management-view.tsx
+   - Create components/admin/reports-view.tsx
+   - Create components/admin/admin-dashboard-view.tsx
 
-5. **Update Order Actions**
-   - Modify `ticketing-system/actions/order-actions.ts`
-   - Remove hardcoded `available_seats: 0`
-   - Verify order details display correctly
+5. **Admin Pages** (Routes)
+   - Create app/admin/page.tsx (dashboard)
+   - Create app/admin/events/page.tsx (event list)
+   - Create app/admin/events/create/page.tsx (create form)
+   - Create app/admin/events/[id]/edit/page.tsx (edit form)
+   - Create app/admin/reports/page.tsx (reports)
 
-6. **Test Application**
-   - Run full integration tests
-   - Verify all features work with calculated values
-   - Check for any remaining errors or warnings
+6. **Navigation Integration** (User Access)
+   - Update components/navigation/navbar.tsx to show admin link
+   - Test complete user flow: login → see admin link → access admin pages
 
-7. **Update Event Creation**
-   - Modify `ticketing-system/actions/event-actions.ts`
-   - Remove `available_seats` from `createEvent` INSERT statement
-   - Test event creation works without available_seats
+7. **Testing & Validation** (Quality Assurance)
+   - Test all CRUD operations
+   - Verify report calculations
+   - Test authorization (admin vs customer)
+   - Verify UI/UX flows
+   - Check error handling
 
-8. **Create Database Migration**
-   - Create `ticketing-system/migrations/008_remove_available_seats.sql`
-   - Add DROP CONSTRAINT and DROP COLUMN statements
-   - Test migration on development database
-
-9. **Update Seed Data**
-   - Modify `ticketing-system/migrations/007_seed_data.sql`
-   - Remove `available_seats` from INSERT statements
-   - Modify `ticketing-system/setup-test-data.sql` similarly
-   - Test seed data works correctly
-
-10. **Update Table Schema Migration**
-    - Modify `ticketing-system/migrations/003_create_seating_sections_table.sql`
-    - Remove `available_seats` column definition
-    - Remove constraint definition
-    - Document this is for reference (old databases will use migration 008)
-
-11. **Final Type Cleanup**
-    - Update `ticketing-system/types/index.ts`
-    - Remove `available_seats` from `SeatingSection` interface completely
-    - Ensure all code uses `SeatingSectionWithAvailability` where needed
-
-12. **Final Testing**
-    - Run complete test suite
-    - Verify no TypeScript errors
-    - Test fresh database creation
-    - Test existing database migration
-    - Performance test with realistic data volumes
-
-13. **Documentation**
-    - Update README if needed
-    - Document the change in IMPLEMENTATION_STATUS.md
-    - Add comments explaining seat calculation approach
+**Critical Success Factors:**
+- Complete steps 1-2 before starting step 3 (foundation must be solid)
+- Test each action before creating UI (backend before frontend)
+- Implement authorization checks early (security first)
+- Use existing patterns and components (maintain consistency)
