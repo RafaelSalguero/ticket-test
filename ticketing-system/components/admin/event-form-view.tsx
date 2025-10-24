@@ -1,10 +1,13 @@
 'use client'
 
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import type { Event, EventFormData, EventEditFormData, ApiResponse } from '@/types'
+import { eventFormSchema, type EventFormInput } from '@/lib/admin-validations'
+import type { Event, ApiResponse } from '@/types'
 
 interface EventFormViewProps {
   mode: 'create' | 'edit'
@@ -16,7 +19,7 @@ interface EventFormViewProps {
 }
 
 /**
- * Pure view component for event create/edit form
+ * Pure view component for event create/edit form with react-hook-form validation
  * Used for both creating new events and editing existing ones
  */
 export function EventFormView({ mode, event, state, isPending, formAction, onCancel }: EventFormViewProps) {
@@ -25,6 +28,32 @@ export function EventFormView({ mode, event, state, isPending, formAction, onCan
     if (!date) return ''
     const d = new Date(date)
     return d.toISOString().split('T')[0]
+  }
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<EventFormInput>({
+    resolver: zodResolver(eventFormSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      name: event?.name || '',
+      description: event?.description || '',
+      eventDate: formatDate(event?.event_date) || '',
+      eventTime: event?.event_time || '',
+      venue: event?.venue || '',
+    },
+  })
+
+  const onSubmit = (data: EventFormInput) => {
+    const formData = new FormData()
+    formData.append('name', data.name)
+    formData.append('description', data.description)
+    formData.append('eventDate', data.eventDate)
+    formData.append('eventTime', data.eventTime)
+    formData.append('venue', data.venue)
+    formAction(formData)
   }
 
   return (
@@ -38,31 +67,33 @@ export function EventFormView({ mode, event, state, isPending, formAction, onCan
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={formAction} className="space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="name">Event Name *</Label>
             <Input
               id="name"
-              name="name"
               type="text"
               placeholder="Championship Finals 2025"
-              defaultValue={event?.name}
-              required
               disabled={isPending}
+              {...register('name')}
             />
+            {errors.name && (
+              <p className="text-sm text-red-600">{errors.name.message}</p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="description">Description *</Label>
             <textarea
               id="description"
-              name="description"
               placeholder="An exciting championship event..."
-              defaultValue={event?.description}
-              required
               disabled={isPending}
-              className="w-full min-h-[100px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full min-h-[100px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              {...register('description')}
             />
+            {errors.description && (
+              <p className="text-sm text-red-600">{errors.description.message}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -70,24 +101,26 @@ export function EventFormView({ mode, event, state, isPending, formAction, onCan
               <Label htmlFor="eventDate">Event Date *</Label>
               <Input
                 id="eventDate"
-                name="eventDate"
                 type="date"
-                defaultValue={formatDate(event?.event_date)}
-                required
                 disabled={isPending}
+                {...register('eventDate')}
               />
+              {errors.eventDate && (
+                <p className="text-sm text-red-600">{errors.eventDate.message}</p>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="eventTime">Event Time *</Label>
               <Input
                 id="eventTime"
-                name="eventTime"
                 type="time"
-                defaultValue={event?.event_time}
-                required
                 disabled={isPending}
+                {...register('eventTime')}
               />
+              {errors.eventTime && (
+                <p className="text-sm text-red-600">{errors.eventTime.message}</p>
+              )}
             </div>
           </div>
 
@@ -95,13 +128,14 @@ export function EventFormView({ mode, event, state, isPending, formAction, onCan
             <Label htmlFor="venue">Venue *</Label>
             <Input
               id="venue"
-              name="venue"
               type="text"
               placeholder="Grand Stadium"
-              defaultValue={event?.venue}
-              required
               disabled={isPending}
+              {...register('venue')}
             />
+            {errors.venue && (
+              <p className="text-sm text-red-600">{errors.venue.message}</p>
+            )}
           </div>
 
           {state?.error && (
