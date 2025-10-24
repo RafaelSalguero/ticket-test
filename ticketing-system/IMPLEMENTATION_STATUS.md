@@ -127,7 +127,19 @@ RETURNING *
 
 ## 🎯 Key Technical Achievements
 
-### 1. Atomic Seat Reservation (Production-Ready) ✅
+### 1. Dynamic Seat Availability Calculation (Production-Ready) ✅
+The system calculates available seats dynamically from the tickets table, eliminating data redundancy:
+
+- **Removed `available_seats` column** from `seating_sections` table
+- Seat availability is now calculated in real-time from ticket status
+- Uses efficient bulk queries for multiple sections
+- Single source of truth (tickets table) prevents data inconsistency
+- Helper module `lib/seat-calculations.ts` provides reusable calculation functions
+
+**Migration 008:** Drops the `available_seats` column and its constraints  
+**Calculation Logic:** `COUNT(*) WHERE status = 'available'` per section
+
+### 2. Atomic Seat Reservation (Production-Ready) ✅
 The system implements a robust, race-condition-free ticket reservation mechanism:
 
 - Uses PostgreSQL's INSERT ON CONFLICT with unique constraint
@@ -136,18 +148,18 @@ The system implements a robust, race-condition-free ticket reservation mechanism
 - User ownership validation before purchase
 - Transaction-based operations for data consistency
 
-### 2. Secure Authentication ✅
+### 3. Secure Authentication ✅
 - Bcrypt password hashing (10 rounds)
 - HTTP-only session cookies
 - Server-side validation
 - Protected routes with requireAuth()
 
-### 3. Automatic Ticket Generation ✅
+### 4. Automatic Ticket Generation ✅
 - When creating an event with sections, tickets are automatically generated
 - Seat numbers follow alphanumeric pattern (A1, A2, B1, B2, etc.)
 - All operations wrapped in transactions for atomicity
 
-### 4. Complete User Flow ✅
+### 5. Complete User Flow ✅
 - User registration and login
 - Browse events
 - Select seats with visual interface
@@ -219,14 +231,17 @@ To verify the double-booking prevention:
 - `components/tickets/seat-selector.tsx` - Interactive seat selection
 - `components/ui/*` - shadcn/ui components (Button, Card, Input, Label)
 
-### Core Libraries (4 files)
+### Core Libraries (5 files)
 - `lib/db.ts` - Database connection with transactions
 - `lib/auth.ts` - Authentication utilities
 - `lib/utils.ts` - Helper functions
 - `lib/validations.ts` - Form validators
+- `lib/seat-calculations.ts` - **Dynamic seat availability calculations**
 
-### Database (6 migrations)
+### Database (8 migrations)
 - All migrations executed successfully
+- **Migration 008:** Removed `available_seats` column (data redundancy elimination)
+- **Migration 003:** Updated for fresh installs without `available_seats`
 - Schema is production-ready
 
 ## 🔒 Security Features
@@ -275,7 +290,53 @@ To verify the double-booking prevention:
 - ✅ Inline code comments
 - ✅ TypeScript types for all data structures
 
+## 🔄 Recent Refactoring (October 23, 2025)
+
+### Removal of Calculated Fields from Database ✅
+
+Successfully implemented a major refactoring to eliminate data redundancy:
+
+**Changes Made:**
+1. ✅ Created `lib/seat-calculations.ts` with helper functions:
+   - `calculateAvailableSeats()` - single section calculation
+   - `calculateAvailableSeatsBulk()` - efficient multi-section calculation
+   - `enrichSectionsWithAvailability()` - adds calculated availability to sections
+
+2. ✅ Updated TypeScript types in `types/index.ts`:
+   - Removed `available_seats` from `SeatingSection` base interface
+   - Added `SeatingSectionWithAvailability` interface for UI usage
+   - Updated all component props to use correct types
+
+3. ✅ Updated all server actions:
+   - `event-actions.ts`: Uses `enrichSectionsWithAvailability()` for all queries
+   - `ticket-actions.ts`: Removed `available_seats` decrement on purchase
+   - `order-actions.ts`: Removed hardcoded `available_seats` from order details
+
+4. ✅ Updated database migrations and seed data:
+   - Created `migrations/008_remove_available_seats.sql`
+   - Updated `migrations/007_seed_data.sql` (removed from INSERT)
+   - Updated `migrations/003_create_seating_sections_table.sql` (for fresh installs)
+   - Updated `setup-test-data.sql` (removed from INSERT)
+
+5. ✅ Updated components and hooks:
+   - `hooks/use-seat-selection.ts`: Uses `SeatingSectionWithAvailability`
+   - All view components properly typed
+
+**Benefits:**
+- ✅ Eliminated data redundancy
+- ✅ Single source of truth (tickets table)
+- ✅ No risk of inconsistent seat counts
+- ✅ Simpler database schema
+- ✅ Maintains excellent performance with bulk calculations
+
+**Testing:**
+- ✅ Application tested and working correctly
+- ✅ Event listings show accurate calculated seat counts
+- ✅ Event details display correct availability
+- ✅ No TypeScript errors
+- ✅ All queries optimized with bulk operations
+
 ---
 
 **Last Updated:** October 23, 2025  
-**Status:** Core functionality complete, admin features and polish remaining
+**Status:** Core functionality complete with optimized data architecture, admin features and polish remaining

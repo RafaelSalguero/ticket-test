@@ -201,16 +201,6 @@ export async function purchaseTickets(
         )
       }
 
-      // Update available seats count
-      for (const ticket of tickets) {
-        await client.query(
-          `UPDATE seating_sections 
-           SET available_seats = available_seats - 1
-           WHERE id = $1`,
-          [ticket.section_id]
-        )
-      }
-
       return orderId
     })
 

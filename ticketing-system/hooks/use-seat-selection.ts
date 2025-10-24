@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getAllSeats, reserveTickets, purchaseTickets } from '@/actions/ticket-actions'
-import type { SeatingSection, Ticket, UseSeatSelectionReturn } from '@/types'
+import type { SeatingSectionWithAvailability, Ticket, UseSeatSelectionReturn } from '@/types'
 
 /**
  * Builds a map of seat ID to status for quick lookup
@@ -31,11 +31,11 @@ function buildSeatStatusMap(seats: Ticket[]): Map<string, Ticket['status']> {
  */
 export function useSeatSelection(
   eventId: string,
-  sections: SeatingSection[],
+  sections: SeatingSectionWithAvailability[],
   userId: string
 ): UseSeatSelectionReturn {
   const router = useRouter()
-  const [selectedSection, setSelectedSection] = useState<SeatingSection | null>(null)
+  const [selectedSection, setSelectedSection] = useState<SeatingSectionWithAvailability | null>(null)
   const [allSeats, setAllSeats] = useState<Ticket[]>([])
   const [seatStatusMap, setSeatStatusMap] = useState<Map<string, Ticket['status']>>(new Map())
   const [selectedSeats, setSelectedSeats] = useState<string[]>([])

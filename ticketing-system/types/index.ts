@@ -27,8 +27,11 @@ export interface SeatingSection {
   section_name: string;
   price: number;
   total_seats: number;
-  available_seats: number;
   created_at: Date;
+}
+
+export interface SeatingSectionWithAvailability extends SeatingSection {
+  available_seats: number;
 }
 
 export interface Ticket {
@@ -105,7 +108,7 @@ export interface ApiResponse<T> {
 }
 
 export interface EventWithSections extends Event {
-  sections: SeatingSection[];
+  sections: SeatingSectionWithAvailability[];
 }
 
 export interface TicketWithDetails extends Ticket {
@@ -129,7 +132,7 @@ export interface EventCardProps {
 
 export interface TicketSelectionProps {
   eventId: string;
-  sections: SeatingSection[];
+  sections: SeatingSectionWithAvailability[];
   onSelectionChange: (tickets: SelectedTicket[]) => void;
 }
 
@@ -166,7 +169,7 @@ export interface RevenueData {
 
 // Hook Return Types
 export interface UseSeatSelectionReturn {
-  selectedSection: SeatingSection | null;
+  selectedSection: SeatingSectionWithAvailability | null;
   allSeats: Ticket[];
   seatStatusMap: Map<string, Ticket['status']>;
   selectedSeats: string[];
@@ -177,7 +180,7 @@ export interface UseSeatSelectionReturn {
   reservedTicketIds: string[];
   totalPrice: number;
   reservedTotalPrice: number;
-  setSelectedSection: (section: SeatingSection | null) => void;
+  setSelectedSection: (section: SeatingSectionWithAvailability | null) => void;
   handleSeatToggle: (seatId: string) => void;
   handleReserve: () => Promise<void>;
   handlePurchase: () => Promise<void>;
@@ -192,8 +195,8 @@ export interface UseAuthFormReturn {
 // View Component Props
 export interface SeatSelectorViewProps {
   eventId: string;
-  sections: SeatingSection[];
-  selectedSection: SeatingSection | null;
+  sections: SeatingSectionWithAvailability[];
+  selectedSection: SeatingSectionWithAvailability | null;
   allSeats: Ticket[];
   seatStatusMap: Map<string, Ticket['status']>;
   selectedSeats: string[];
@@ -204,7 +207,7 @@ export interface SeatSelectorViewProps {
   reservedTicketIds: string[];
   totalPrice: number;
   reservedTotalPrice: number;
-  onSectionSelect: (section: SeatingSection) => void;
+  onSectionSelect: (section: SeatingSectionWithAvailability) => void;
   onSeatToggle: (seatId: string) => void;
   onReserve: () => void;
   onPurchase: () => void;

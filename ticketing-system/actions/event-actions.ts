@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { query, transaction } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 import { generateSeatNumbers } from '@/lib/utils'
+import { enrichSectionsWithAvailability } from '@/lib/seat-calculations'
 import type { ApiResponse, Event, EventWithSections, SeatingSection } from '@/types'
 
 export async function getEvents(): Promise<EventWithSections[]> {
@@ -23,7 +24,7 @@ export async function getEvents(): Promise<EventWithSections[]> {
       
       events.push({
         ...event,
-        sections: sectionsResult.rows,
+        sections: await enrichSectionsWithAvailability(sectionsResult.rows),
       })
     }
 
@@ -54,7 +55,7 @@ export async function getEventById(id: string): Promise<EventWithSections | null
 
     return {
       ...event,
-      sections: sectionsResult.rows,
+      sections: await enrichSectionsWithAvailability(sectionsResult.rows),
     }
   } catch (error) {
     console.error('Error fetching event:', error)
@@ -113,8 +114,8 @@ export async function createEvent(
       for (const section of sections) {
         // Create section
         const sectionResult = await client.query<SeatingSection>(
-          `INSERT INTO seating_sections (event_id, section_name, price, total_seats, available_seats)
-           VALUES ($1, $2, $3, $4, $4)
+          `INSERT INTO seating_sections (event_id, section_name, price, total_seats)
+           VALUES ($1, $2, $3, $4)
            RETURNING *`,
           [newEvent.id, section.sectionName, section.price, section.totalSeats]
         )
@@ -189,7 +190,7 @@ export async function getUpcomingEvents(): Promise<EventWithSections[]> {
       
       events.push({
         ...event,
-        sections: sectionsResult.rows,
+        sections: await enrichSectionsWithAvailability(sectionsResult.rows),
       })
     }
 

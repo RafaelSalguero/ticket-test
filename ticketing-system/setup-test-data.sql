@@ -27,23 +27,23 @@ WITH new_event AS (
 ),
 -- 3. Create seating sections
 vip_section AS (
-  INSERT INTO seating_sections (event_id, section_name, price, total_seats, available_seats)
-  SELECT id, 'VIP Premium', 199.99, 20, 20 FROM new_event
+  INSERT INTO seating_sections (event_id, section_name, price, total_seats)
+  SELECT id, 'VIP Premium', 199.99, 20 FROM new_event
   RETURNING id, event_id
 ),
 premium_section AS (
-  INSERT INTO seating_sections (event_id, section_name, price, total_seats, available_seats)
-  SELECT id, 'Premium Seating', 129.99, 40, 40 FROM new_event
+  INSERT INTO seating_sections (event_id, section_name, price, total_seats)
+  SELECT id, 'Premium Seating', 129.99, 40 FROM new_event
   RETURNING id, event_id
 ),
 standard_section AS (
-  INSERT INTO seating_sections (event_id, section_name, price, total_seats, available_seats)
-  SELECT id, 'Standard View', 79.99, 60, 60 FROM new_event
+  INSERT INTO seating_sections (event_id, section_name, price, total_seats)
+  SELECT id, 'Standard View', 79.99, 60 FROM new_event
   RETURNING id, event_id
 ),
 economy_section AS (
-  INSERT INTO seating_sections (event_id, section_name, price, total_seats, available_seats)
-  SELECT id, 'Economy', 49.99, 80, 80 FROM new_event
+  INSERT INTO seating_sections (event_id, section_name, price, total_seats)
+  SELECT id, 'Economy', 49.99, 80 FROM new_event
   RETURNING id, event_id
 ),
 -- 4. Generate tickets for VIP section (rows A-B, 10 seats each)

@@ -1,297 +1,278 @@
-# Implementation Plan: Show All Seats with Status Indicators
+# Implementation Plan: Remove Calculated Fields from Database
 
 ## [Overview]
+Remove the `available_seats` column from the `seating_sections` table and replace all references with dynamic queries that calculate available seats from the `tickets` table based on ticket status.
 
-Modify the seat selector component to display all seats (both available and reserved) with visual status indicators, disabling unavailable seats while showing their status with distinct coloring.
-
-The current implementation uses `getAvailableSeats()` which queries ONLY available seats from the database (filtering at the query level). This plan will:
-- Create a new query function to fetch ALL seats regardless of status
-- Display all seats in the grid layout
-- Show status badges/labels for each seat (Available, Reserved, Sold)
-- Apply distinct red/orange styling to reserved/sold seats
-- Disable interaction on reserved/sold seats while keeping available seats selectable
-- Maintain the current seat selection functionality for available seats
-
-This improves user experience by showing the complete seating layout, giving users context about seat availability and the overall venue structure.
+This refactoring eliminates data redundancy and potential inconsistencies by making the tickets table the single source of truth for seat availability. The change affects database migrations, TypeScript types, server actions, and UI components that display or depend on available seat counts.
 
 ## [Types]
+Modify TypeScript interfaces to reflect the removal of the calculated field from database models.
 
-Extend and clarify seat-related type definitions to explicitly include seat status information.
+**Modifications to `ticketing-system/types/index.ts`:**
 
-### Type System Enhancements
+1. Remove `available_seats` from the `SeatingSection` interface:
+   ```typescript
+   export interface SeatingSection {
+     id: string;
+     event_id: string;
+     section_name: string;
+     price: number;
+     total_seats: number;
+     // REMOVE: available_seats: number;
+     created_at: Date;
+   }
+   ```
 
-1. **Seat Status Type** (in `types/index.ts`)
-   - Currently Ticket type has `status` field
-   - Ensure consistent handling of status values: 'available', 'reserved', 'sold', 'pending'
+2. Create a new interface for sections with calculated available seats (used in application code):
+   ```typescript
+   export interface SeatingSecti onWithAvailability extends SeatingSection {
+     available_seats: number;
+   }
+   ```
 
-2. **Seat Selection Hook Return Type** (in `hooks/use-seat-selection.ts`)
-   - Add `allSeats` property to return ALL seat objects (not just available)
-   - Add `seatStatusMap` property: `Record<string, Ticket>` to track seat status by seat number
-   - Maintain `availableSeats` for backward compatibility
-   - Maintain `selectedSeats` for current selection state
+3. Update `EventWithSections` to use the new interface:
+   ```typescript
+   export interface EventWithSections extends Event {
+     sections: SeatingSectionWithAvailability[];
+   }
+   ```
 
 ## [Files]
+Database migrations, seed data, type definitions, server actions, and UI components require updates to remove or calculate available_seats.
 
-Create new query function and modify existing component files to support the new seat display functionality.
+**Files to Modify:**
 
-### New Files
-- `ticketing-system/components/tickets/seat-status-badge.tsx` - New component to display seat status labels with appropriate styling
+1. **ticketing-system/migrations/003_create_seating_sections_table.sql**
+   - Remove `available_seats` column definition
+   - Remove `chk_available_seats` constraint
 
-### Modified Files
+2. **ticketing-system/migrations/007_seed_data.sql**
+   - Remove `available_seats` from INSERT statements for seating sections
 
-1. **ticketing-system/actions/ticket-actions.ts**
-   - **CRITICAL**: Add new function `getAllSeats(eventId: string, sectionId: string)` that queries ALL tickets regardless of status
-   - Query: `SELECT * FROM tickets WHERE event_id = $1 AND section_id = $2 ORDER BY seat_number ASC`
-   - This is the KEY change - fetching all seats at the data layer
+3. **ticketing-system/setup-test-data.sql**
+   - Remove `available_seats` from INSERT statements for seating sections
 
-2. **ticketing-system/components/tickets/seat-selector-view.tsx**
-   - Change from calling `getAvailableSeats()` to calling `getAllSeats()`
-   - Pass all seats to the SeatSelector component
-   - Update to handle complete seat inventory data
+4. **ticketing-system/types/index.ts**
+   - Remove `available_seats` from `SeatingSection` interface
+   - Add new `SeatingSectionWithAvailability` interface
+   - Update `EventWithSections` to use new interface
 
-3. **ticketing-system/hooks/use-seat-selection.ts**
-   - Receive all seats (not filtered)
-   - Create `seatStatusMap` from all seats for quick lookup
-   - Filter `availableSeats` from all seats for selection logic
-   - Return both `allSeats` and `seatStatusMap` in addition to existing return values
-   - Update selection logic to prevent selection of non-available seats
+5. **ticketing-system/actions/event-actions.ts**
+   - Remove `available_seats` from section INSERT statements
+   - Add helper function to calculate available seats
+   - Update queries to calculate and include available_seats in results
 
-4. **ticketing-system/components/tickets/seat-selector.tsx**
-   - Modify to iterate over ALL seats instead of just available ones
-   - Remove any filtering logic
-   - Add status badge rendering for each seat
-   - Apply conditional styling based on seat status (red/orange for reserved/sold)
-   - Add disabled attribute to reserved/sold seats
-   - Prevent click handlers from firing on non-available seats
+6. **ticketing-system/actions/ticket-actions.ts**
+   - Remove the UPDATE statement that decrements `available_seats`
+   - Add logic to calculate available seats where needed
 
-5. **ticketing-system/app/globals.css**
-   - Add CSS classes for reserved seat styling (red/orange background or border)
-   - Add CSS classes for sold seat styling (darker red or different indicator)
-   - Add CSS classes for disabled seat appearance (cursor: not-allowed, reduced opacity)
-   - Add CSS classes for available seat styling (highlight on hover, blue when selected)
+7. **ticketing-system/components/tickets/seat-selector-view.tsx**
+   - No changes needed (receives calculated data from parent)
 
-### No Deletion
-- All existing files remain; only modifications and additions occur
-- Keep `getAvailableSeats()` function for backward compatibility if needed elsewhere
+8. **ticketing-system/components/events/events-list-view.tsx**
+   - No changes needed (receives calculated data from loader)
+
+9. **ticketing-system/actions/order-actions.ts**
+   - Remove hardcoded `available_seats: 0`
+   - Add calculation for available seats if needed
+
+**New Files to Create:**
+
+1. **ticketing-system/migrations/008_remove_available_seats.sql**
+   - Migration to drop the `available_seats` column
+   - Drop the `chk_available_seats` constraint
+
+2. **ticketing-system/lib/seat-calculations.ts**
+   - Helper functions for calculating available seats
+   - Centralized query logic for seat availability
 
 ## [Functions]
+Create new helper functions for seat calculations and update existing functions to remove available_seats references.
 
-Create new data fetching functions and modify existing functions to support displaying all seats.
+**New Functions:**
 
-### New Functions
+1. **`calculateAvailableSeats(sectionId: string): Promise<number>`** in `lib/seat-calculations.ts`
+   - Purpose: Query tickets table to count available seats for a section
+   - Query: `SELECT COUNT(*) FROM tickets WHERE section_id = $1 AND status = 'available'`
+   - Returns: Number of available seats
 
-1. **getAllSeats()** (in `actions/ticket-actions.ts`)
-   - **Purpose**: Fetch ALL tickets for a section regardless of status
-   - **Signature**: `async getAllSeats(eventId: string, sectionId: string): Promise<Ticket[]>`
-   - **Query**: 
-     ```sql
-     SELECT * FROM tickets 
-     WHERE event_id = $1 AND section_id = $2 
-     ORDER BY seat_number ASC
-     ```
-   - **Returns**: Array of all Ticket objects with their current status
+2. **`calculateAvailableSeatsBulk(sectionIds: string[]): Promise<Map<string, number>>`** in `lib/seat-calculations.ts`
+   - Purpose: Efficiently calculate available seats for multiple sections
+   - Query: `SELECT section_id, COUNT(*) FROM tickets WHERE section_id = ANY($1) AND status = 'available' GROUP BY section_id`
+   - Returns: Map of section_id to available seat count
 
-2. **buildSeatStatusMap()** (in `hooks/use-seat-selection.ts`)
-   - **Purpose**: Create a lookup map of seat number to ticket object
-   - **Signature**: `(tickets: Ticket[]) => Record<string, Ticket>`
-   - **Logic**: Reduce tickets array into object keyed by seat_number
-   - **Returns**: Object mapping seat numbers to their ticket objects
+3. **`enrichSectionsWithAvailability(sections: SeatingSection[]): Promise<SeatingSectionWithAvailability[]>`** in `lib/seat-calculations.ts`
+   - Purpose: Add available_seats to section objects
+   - Uses `calculateAvailableSeatsBulk` for efficiency
+   - Returns: Sections with calculated available_seats
 
-3. **SeatStatusBadge Component** (in `components/tickets/seat-status-badge.tsx`)
-   - **Purpose**: Display status label for each seat
-   - **Props**: `{ status: 'available' | 'reserved' | 'sold' | 'pending' }`
-   - **Renders**: Small badge/label with appropriate styling and text
+**Modified Functions:**
 
-### Modified Functions
+1. **`createEvent`** in `actions/event-actions.ts`
+   - File: ticketing-system/actions/event-actions.ts
+   - Change: Remove `available_seats` from INSERT statement
+   - Before: `INSERT INTO seating_sections (event_id, section_name, price, total_seats, available_seats) VALUES (..., $4, $4)`
+   - After: `INSERT INTO seating_sections (event_id, section_name, price, total_seats) VALUES (..., $4)`
 
-1. **useSeatSelection()** (in `hooks/use-seat-selection.ts`)
-   - **Current behavior**: Receives availableSeats only
-   - **New behavior**: Receives allSeats, builds seatStatusMap
-   - **New return values**: 
-     - `allSeats: Ticket[]` - All seats for rendering
-     - `seatStatusMap: Record<string, Ticket>` - Quick status lookup
-     - `availableSeats: Ticket[]` - Filtered available seats (derived from allSeats)
-     - `selectedSeats: string[]` - Currently selected seat numbers (existing)
-     - `toggleSeat: (seatNumber: string) => void` - Selection handler (existing)
-   - **Updated logic**: Filter availableSeats from allSeats where status === 'available'
+2. **`getEvents`** in `actions/event-actions.ts`
+   - File: ticketing-system/actions/event-actions.ts
+   - Change: Use `enrichSectionsWithAvailability` to calculate available seats
+   - Add import: `import { enrichSectionsWithAvailability } from '@/lib/seat-calculations'`
+   - After fetching sections: `sections: await enrichSectionsWithAvailability(sectionsResult.rows)`
 
-2. **toggleSeat handler** (in `hooks/use-seat-selection.ts`)
-   - Add validation: Check if seat is available before allowing selection
-   - Prevent selection of reserved/sold seats
+3. **`getEventById`** in `actions/event-actions.ts`
+   - File: ticketing-system/actions/event-actions.ts
+   - Change: Use `enrichSectionsWithAvailability` to calculate available seats
+   - After fetching sections: `sections: await enrichSectionsWithAvailability(sectionsResult.rows)`
 
-3. **Seat rendering logic** (in `seat-selector.tsx`)
-   - Change from mapping over `availableSeats` to mapping over `allSeats`
-   - Add conditional checks for seat status to apply appropriate styling
-   - Add disabled attribute based on seat status
-   - Add onClick guard to prevent interaction with non-available seats
+4. **`getUpcomingEvents`** in `actions/event-actions.ts`
+   - File: ticketing-system/actions/event-actions.ts
+   - Change: Use `enrichSectionsWithAvailability` to calculate available seats
+   - After fetching sections: `sections: await enrichSectionsWithAvailability(sectionsResult.rows)`
 
-## [Classes]
-
-Introduce new component class structures for modular seat rendering.
-
-### New Components
-
-1. **SeatStatusBadge** (in `seat-status-badge.tsx`)
-   - **Props Interface**: 
+5. **`purchaseTickets`** in `actions/ticket-actions.ts`
+   - File: ticketing-system/actions/ticket-actions.ts
+   - Change: Remove the UPDATE statement that decrements available_seats
+   - Remove this block:
      ```typescript
-     interface SeatStatusBadgeProps {
-       status: 'available' | 'reserved' | 'sold' | 'pending'
+     // Update available seats count
+     for (const ticket of tickets) {
+       await client.query(
+         `UPDATE seating_sections 
+          SET available_seats = available_seats - 1
+          WHERE id = $1`,
+         [ticket.section_id]
+       )
      }
      ```
-   - **Styling**: Different colors/badges based on status
-     - Available: Green or blue badge
-     - Reserved: Orange/yellow badge (user preference: distinct color)
-     - Sold: Red badge
-     - Pending: Gray badge
-   - **Text**: Display status as readable text
 
-### Modified Components
+6. **`getOrderById`** in `actions/order-actions.ts`
+   - File: ticketing-system/actions/order-actions.ts
+   - Change: Remove hardcoded `available_seats: 0` from section object
+   - Consider if available_seats is needed in order details (likely not needed)
 
-1. **Seat Button Rendering** (in `seat-selector.tsx`)
-   - Add conditional className based on seat status
-   - Apply red/orange styling for reserved seats
-   - Apply darker red for sold seats
-   - Add disabled attribute for non-available seats
-   - Include SeatStatusBadge component in rendering
-   - Structure:
-     ```tsx
-     <button
-       className={cn(
-         "base-seat-styles",
-         status === 'available' && "available-seat-styles",
-         status === 'reserved' && "reserved-seat-styles",
-         status === 'sold' && "sold-seat-styles",
-         isSelected && "selected-seat-styles"
-       )}
-       disabled={status !== 'available'}
-       onClick={() => status === 'available' && toggleSeat(seatNumber)}
-     >
-       {seatNumber}
-       <SeatStatusBadge status={status} />
-     </button>
-     ```
+## [Classes]
+No class modifications required. This project uses functional components and server actions rather than class-based architecture.
 
 ## [Dependencies]
-
-No new package dependencies are required. The implementation uses existing React, TypeScript, and styling capabilities already present in the project.
-
-### Existing Dependencies Utilized
-- React for component rendering
-- TypeScript for type safety
-- PostgreSQL for database queries
-- CSS for styling
-- Server Actions pattern for data fetching
+No new external dependencies required. All changes use existing PostgreSQL queries and TypeScript functionality.
 
 ## [Testing]
+Ensure data integrity and correct calculation of available seats across all features.
 
-Verify the seat selector displays all seats with correct statuses and interactivity.
+**Test Modifications:**
 
-### Manual Testing Steps
+1. **Migration Testing**
+   - Run migration 008 on test database
+   - Verify `available_seats` column is dropped
+   - Verify existing data remains intact
+   - Test rollback scenario if needed
 
-1. **Data Verification**
-   - Check that `getAllSeats()` returns all tickets including reserved and sold ones
-   - Verify the query includes all statuses
+2. **Unit Tests for Seat Calculations**
+   - Test `calculateAvailableSeats` with various ticket statuses
+   - Test `calculateAvailableSeatsBulk` with multiple sections
+   - Test edge cases: no tickets, all sold, all reserved
 
-2. **UI Display**
-   - Navigate to event detail page with ticket selection
-   - Verify all seats are visible in the grid (no hidden seats)
-   - Count total seats displayed vs expected total
+3. **Integration Tests**
+   - Test event creation without available_seats
+   - Test ticket purchase flow calculates correctly
+   - Test event listing shows correct availability
+   - Test seat selector shows correct available seats
+   - Test reservation expiration doesn't affect calculation
 
-3. **Available Seat Interaction**
-   - Verify available seats are clickable and selectable
-   - Verify selection state toggles correctly
-   - Verify selected seats show distinct styling
+4. **Data Integrity Tests**
+   - Compare old available_seats values with calculated values before migration
+   - Verify counts match after migration
+   - Test that multiple concurrent purchases don't cause issues
 
-4. **Reserved/Sold Seat Display**
-   - Verify reserved seats are displayed with red/orange styling (user preference)
-   - Verify sold seats are displayed with appropriate styling
-   - Verify status badges are visible and correct
+5. **Performance Testing**
+   - Measure query performance for `enrichSectionsWithAvailability`
+   - Test with large numbers of events and sections
+   - Ensure bulk calculation is more efficient than individual queries
 
-5. **Disabled Seat Interaction**
-   - Verify reserved seats cannot be clicked/selected
-   - Verify sold seats cannot be clicked/selected
-   - Verify cursor changes to "not-allowed" on hover
-
-6. **Selection Logic**
-   - Attempt to select reserved/sold seats - should not work
-   - Verify only available seats can be added to selection
-   - Verify selection state persists correctly
-
-### Edge Cases to Test
-
-- Event with all seats reserved/sold
-- Event with all seats available
-- Event with partial reservation (mix of statuses)
-- Multi-section seating
-- Events with large number of seats (performance)
-- Expired reservations (status transitions)
-
-### Database Testing
-
-```sql
--- Verify query returns all seats
-SELECT * FROM tickets 
-WHERE event_id = 'test-event-id' AND section_id = 'test-section-id' 
-ORDER BY seat_number ASC;
-
--- Check different statuses exist
-SELECT status, COUNT(*) FROM tickets 
-WHERE event_id = 'test-event-id' 
-GROUP BY status;
-```
+**Manual Testing Checklist:**
+- [ ] View events list and verify seat counts
+- [ ] Open event detail page and verify section availability
+- [ ] Select seats and verify counts update correctly
+- [ ] Reserve tickets and verify availability decreases
+- [ ] Purchase tickets and verify availability decreases
+- [ ] Let reservation expire and verify availability increases
+- [ ] Create new event and verify initial availability equals total_seats
+- [ ] Test concurrent purchases (open event in two browsers)
 
 ## [Implementation Order]
+Follow this sequence to minimize breaking changes and ensure safe deployment.
 
-Execute changes in this sequence to minimize conflicts and ensure proper integration.
+1. **Create Helper Functions**
+   - Create `ticketing-system/lib/seat-calculations.ts`
+   - Implement `calculateAvailableSeats`
+   - Implement `calculateAvailableSeatsBulk`
+   - Implement `enrichSectionsWithAvailability`
+   - Add unit tests for helper functions
 
-1. **Add `getAllSeats()` function** in `actions/ticket-actions.ts`
-   - This is the CRITICAL first step - changes data layer
-   - Write query to fetch all tickets regardless of status
-   - Export the new function
+2. **Update TypeScript Types**
+   - Modify `ticketing-system/types/index.ts`
+   - Add `SeatingSectionWithAvailability` interface
+   - Update `EventWithSections` interface
+   - Keep `SeatingSection` with `available_seats` temporarily for compatibility
 
-2. **Update `seat-selector-view.tsx`** to use new data function
-   - Change from `getAvailableSeats()` to `getAllSeats()`
-   - Pass all seats to child components
+3. **Update Event Actions**
+   - Modify `ticketing-system/actions/event-actions.ts`
+   - Update `getEvents` to use `enrichSectionsWithAvailability`
+   - Update `getEventById` to use `enrichSectionsWithAvailability`
+   - Update `getUpcomingEvents` to use `enrichSectionsWithAvailability`
+   - Keep `createEvent` INSERT with available_seats for now
 
-3. **Create helper function `buildSeatStatusMap()`** in `hooks/use-seat-selection.ts`
-   - Maps seat numbers to ticket objects for quick lookup
+4. **Update Ticket Actions**
+   - Modify `ticketing-system/actions/ticket-actions.ts`
+   - Remove the UPDATE statement from `purchaseTickets` that decrements available_seats
+   - Test purchase flow still works correctly
 
-4. **Update `useSeatSelection()` hook** in `hooks/use-seat-selection.ts`
-   - Receive all seats instead of filtered seats
-   - Build seatStatusMap
-   - Filter availableSeats from allSeats
-   - Return allSeats and seatStatusMap
-   - Add guard in toggleSeat to prevent non-available selection
+5. **Update Order Actions**
+   - Modify `ticketing-system/actions/order-actions.ts`
+   - Remove hardcoded `available_seats: 0`
+   - Verify order details display correctly
 
-5. **Create `SeatStatusBadge` component** in `components/tickets/seat-status-badge.tsx`
-   - Simple component to render status badges
-   - Conditional styling based on status prop
+6. **Test Application**
+   - Run full integration tests
+   - Verify all features work with calculated values
+   - Check for any remaining errors or warnings
 
-6. **Add CSS styling** in `app/globals.css`
-   - Reserved seat styles (red/orange per user preference)
-   - Sold seat styles
-   - Disabled seat styles (cursor, opacity)
-   - Available seat styles (hover, selection)
+7. **Update Event Creation**
+   - Modify `ticketing-system/actions/event-actions.ts`
+   - Remove `available_seats` from `createEvent` INSERT statement
+   - Test event creation works without available_seats
 
-7. **Modify `seat-selector.tsx`** component
-   - Change from mapping over availableSeats to allSeats
-   - Add conditional styling based on seat status
-   - Include SeatStatusBadge in seat rendering
-   - Add disabled attribute logic
-   - Add onClick guard to prevent interaction with non-available seats
+8. **Create Database Migration**
+   - Create `ticketing-system/migrations/008_remove_available_seats.sql`
+   - Add DROP CONSTRAINT and DROP COLUMN statements
+   - Test migration on development database
 
-8. **Test complete flow**
-   - Verify data fetching returns all seats
-   - Verify UI displays all seats correctly
-   - Verify status indicators are correct
-   - Verify interaction is properly restricted
+9. **Update Seed Data**
+   - Modify `ticketing-system/migrations/007_seed_data.sql`
+   - Remove `available_seats` from INSERT statements
+   - Modify `ticketing-system/setup-test-data.sql` similarly
+   - Test seed data works correctly
 
-9. **Edge case testing**
-   - Test with different event/section combinations
-   - Verify expired reservations show correctly
-   - Test performance with many seats
+10. **Update Table Schema Migration**
+    - Modify `ticketing-system/migrations/003_create_seating_sections_table.sql`
+    - Remove `available_seats` column definition
+    - Remove constraint definition
+    - Document this is for reference (old databases will use migration 008)
 
-10. **Final styling adjustments**
-    - Fine-tune colors and spacing
-    - Ensure accessibility (contrast ratios, focus indicators)
-    - Verify responsive behavior
+11. **Final Type Cleanup**
+    - Update `ticketing-system/types/index.ts`
+    - Remove `available_seats` from `SeatingSection` interface completely
+    - Ensure all code uses `SeatingSectionWithAvailability` where needed
+
+12. **Final Testing**
+    - Run complete test suite
+    - Verify no TypeScript errors
+    - Test fresh database creation
+    - Test existing database migration
+    - Performance test with realistic data volumes
+
+13. **Documentation**
+    - Update README if needed
+    - Document the change in IMPLEMENTATION_STATUS.md
+    - Add comments explaining seat calculation approach

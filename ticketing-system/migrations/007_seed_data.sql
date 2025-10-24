@@ -42,12 +42,11 @@ ON CONFLICT DO NOTHING;
 WITH event_1 AS (
   SELECT id FROM events WHERE name = 'Championship Finals 2025' LIMIT 1
 )
-INSERT INTO seating_sections (event_id, section_name, price, total_seats, available_seats)
+INSERT INTO seating_sections (event_id, section_name, price, total_seats)
 SELECT 
   id,
   section_name,
   price::numeric,
-  total_seats::integer,
   total_seats::integer
 FROM event_1
 CROSS JOIN (VALUES
@@ -62,12 +61,11 @@ ON CONFLICT DO NOTHING;
 WITH event_2 AS (
   SELECT id FROM events WHERE name = 'Spring Tournament 2025' LIMIT 1
 )
-INSERT INTO seating_sections (event_id, section_name, price, total_seats, available_seats)
+INSERT INTO seating_sections (event_id, section_name, price, total_seats)
 SELECT 
   id,
   section_name,
   price::numeric,
-  total_seats::integer,
   total_seats::integer
 FROM event_2
 CROSS JOIN (VALUES
@@ -81,12 +79,11 @@ ON CONFLICT DO NOTHING;
 WITH event_3 AS (
   SELECT id FROM events WHERE name = 'Summer Classic 2025' LIMIT 1
 )
-INSERT INTO seating_sections (event_id, section_name, price, total_seats, available_seats)
+INSERT INTO seating_sections (event_id, section_name, price, total_seats)
 SELECT 
   id,
   section_name,
   price::numeric,
-  total_seats::integer,
   total_seats::integer
 FROM event_3
 CROSS JOIN (VALUES

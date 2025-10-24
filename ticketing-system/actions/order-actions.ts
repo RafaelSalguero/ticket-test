@@ -87,7 +87,6 @@ export async function getOrderById(orderId: string): Promise<OrderWithDetails | 
             section_name: item.section_name || '',
             price: item.section_price || 0,
             total_seats: 0,
-            available_seats: 0,
             created_at: new Date(),
           },
         },
