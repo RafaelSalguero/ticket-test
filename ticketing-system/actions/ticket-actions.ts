@@ -11,27 +11,24 @@ interface TicketWithDetails extends Ticket {
   price?: number
 }
 
-export async function getAvailableSeats(
+export async function getAllSeats(
   eventId: string,
   sectionId: string
 ): Promise<Ticket[]> {
   try {
-    // Get tickets that are either available OR have expired reservations (>5 minutes)
+    // Get ALL tickets for a section, regardless of status
+    // This includes available, reserved, and sold tickets
     const result = await query<Ticket>(
       `SELECT * FROM tickets 
        WHERE event_id = $1 
          AND section_id = $2 
-         AND (
-           status = 'available' 
-           OR (status = 'reserved' AND reserved_at < NOW() - INTERVAL '5 minutes')
-         )
        ORDER BY seat_number ASC`,
       [eventId, sectionId]
     )
 
     return result.rows
   } catch (error) {
-    console.error('Error fetching available seats:', error)
+    console.error('Error fetching all seats:', error)
     return []
   }
 }
@@ -132,38 +129,6 @@ export async function reserveTickets(
       success: false,
       error: 'Failed to reserve tickets',
     }
-  }
-}
-
-export async function getUserReservedTickets(userId: string): Promise<Ticket[]> {
-  try {
-    const result = await query<Ticket>(
-      `SELECT * FROM tickets 
-       WHERE user_id = $1 
-         AND status = 'reserved'
-         AND reserved_at > NOW() - INTERVAL '5 minutes'
-       ORDER BY reserved_at DESC`,
-      [userId]
-    )
-
-    return result.rows
-  } catch (error) {
-    console.error('Error fetching reserved tickets:', error)
-    return []
-  }
-}
-
-export async function releaseExpiredReservations(): Promise<void> {
-  try {
-    // Release reservations older than 5 minutes
-    await query(
-      `UPDATE tickets 
-       SET user_id = NULL, status = 'available', reserved_at = NULL
-       WHERE status = 'reserved' 
-         AND reserved_at < NOW() - INTERVAL '5 minutes'`
-    )
-  } catch (error) {
-    console.error('Error releasing expired reservations:', error)
   }
 }
 

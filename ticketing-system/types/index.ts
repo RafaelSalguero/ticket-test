@@ -167,7 +167,8 @@ export interface RevenueData {
 // Hook Return Types
 export interface UseSeatSelectionReturn {
   selectedSection: SeatingSection | null;
-  availableSeats: Ticket[];
+  allSeats: Ticket[];
+  seatStatusMap: Map<string, Ticket['status']>;
   selectedSeats: string[];
   loading: boolean;
   reserving: boolean;
@@ -193,7 +194,8 @@ export interface SeatSelectorViewProps {
   eventId: string;
   sections: SeatingSection[];
   selectedSection: SeatingSection | null;
-  availableSeats: Ticket[];
+  allSeats: Ticket[];
+  seatStatusMap: Map<string, Ticket['status']>;
   selectedSeats: string[];
   loading: boolean;
   reserving: boolean;

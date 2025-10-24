@@ -1,17 +1,19 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
-import type { SeatSelectorViewProps } from '@/types'
+import type { SeatSelectorViewProps, Ticket } from '@/types'
+
 
 /**
  * Pure view component for seat selection
- * Displays sections, available seats, and handles user interactions via callbacks
+ * Displays sections, all seats with status indicators, and handles user interactions via callbacks
  */
 export function SeatSelectorView({
   eventId,
   sections,
   selectedSection,
-  availableSeats,
+  allSeats,
+  seatStatusMap,
   selectedSeats,
   loading,
   reserving,
@@ -92,36 +94,48 @@ export function SeatSelectorView({
           <>
             <div className="mb-6">
               <h3 className="font-semibold mb-3">
-                Available Seats in {selectedSection.section_name}
+                Seats in {selectedSection.section_name}
               </h3>
               {loading ? (
                 <p className="text-gray-600">Loading seats...</p>
-              ) : availableSeats.length === 0 ? (
-                <p className="text-gray-600">No seats available in this section</p>
+              ) : allSeats.length === 0 ? (
+                <p className="text-gray-600">No seats in this section</p>
               ) : (
                 <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
-                  {availableSeats.map((seat) => (
-                    <button
-                      key={seat.id}
-                      onClick={() => onSeatToggle(seat.id)}
-                      disabled={reservedTicketIds.length > 0}
-                      className={`
-                        p-2 rounded text-sm font-medium transition-colors
-                        ${
-                          selectedSeats.includes(seat.id)
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
-                        }
-                        ${
-                          reservedTicketIds.length > 0
-                            ? 'opacity-50 cursor-not-allowed'
-                            : 'cursor-pointer'
-                        }
-                      `}
-                    >
-                      {seat.seat_number}
-                    </button>
-                  ))}
+                  {allSeats.map((seat) => {
+                    const status = seatStatusMap.get(seat.id) || seat.status
+                    const isAvailable = status === 'available'
+                    const isSelected = selectedSeats.includes(seat.id)
+                    const isDisabled = !isAvailable || reservedTicketIds.length > 0
+                    
+                    return (
+                      <button
+                        key={seat.id}
+                        onClick={() => isAvailable && onSeatToggle(seat.id)}
+                        disabled={isDisabled}
+                        title={`Seat ${seat.seat_number} - ${status}`}
+                        className={`
+                          p-2 rounded text-sm font-medium transition-colors relative
+                          ${
+                            isSelected
+                              ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              : status === 'available'
+                              ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                              : status === 'reserved'
+                              ? 'bg-orange-500 text-white cursor-not-allowed'
+                              : 'bg-gray-400 text-gray-100 cursor-not-allowed'
+                          }
+                          ${
+                            isDisabled && status === 'available'
+                              ? 'opacity-50 cursor-not-allowed'
+                              : ''
+                          }
+                        `}
+                      >
+                        {seat.seat_number}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -130,14 +144,15 @@ export function SeatSelectorView({
             {selectedSeats.length > 0 && (
               <div className="bg-blue-50 p-4 rounded-lg mb-4">
                 <p className="font-semibold mb-2">
-                  Selected: {selectedSeats.length} seat(s):
+                  Selected: {selectedSeats.length} seat(s)
                 </p>
                 <p>
                   {
                     selectedSeats
-                    .map(id => availableSeats.find(x => x.id == id)).filter(Boolean)
-                    .map(x => x?.seat_number)
-                    .toSorted()
+                    .map(id => allSeats.find(x => x.id === id))
+                    .filter((x): x is Ticket => x !== undefined)
+                    .map(x => x.seat_number)
+                    .sort()
                     .join(", ")
                   }
                 </p>
@@ -184,14 +199,22 @@ export function SeatSelectorView({
         {/* Legend */}
         <div className="mt-6 pt-6 border-t">
           <h4 className="font-semibold mb-2 text-sm">Legend</h4>
-          <div className="flex gap-4 text-sm">
+          <div className="flex flex-wrap gap-4 text-sm">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gray-100 rounded"></div>
+              <div className="w-8 h-8 bg-green-100 rounded border border-green-200"></div>
               <span>Available</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-600 rounded"></div>
               <span>Selected</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-orange-500 rounded"></div>
+              <span>Reserved</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-gray-400 rounded"></div>
+              <span>Sold</span>
             </div>
           </div>
         </div>

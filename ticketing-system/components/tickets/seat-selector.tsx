@@ -17,7 +17,8 @@ interface SeatSelectorProps {
 export function SeatSelector({ eventId, sections, userId }: SeatSelectorProps) {
   const {
     selectedSection,
-    availableSeats,
+    allSeats,
+    seatStatusMap,
     selectedSeats,
     loading,
     reserving,
@@ -37,7 +38,8 @@ export function SeatSelector({ eventId, sections, userId }: SeatSelectorProps) {
       eventId={eventId}
       sections={sections}
       selectedSection={selectedSection}
-      availableSeats={availableSeats}
+      allSeats={allSeats}
+      seatStatusMap={seatStatusMap}
       selectedSeats={selectedSeats}
       loading={loading}
       reserving={reserving}

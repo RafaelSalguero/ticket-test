@@ -1,275 +1,297 @@
-# Implementation Plan: Separate Data Loading from Presentation
+# Implementation Plan: Show All Seats with Status Indicators
 
-## Overview
+## [Overview]
 
-This refactoring separates presentation logic from API access across all components in the ticketing system. Each component that currently mixes concerns will be split into two parts: a loader/container that handles data fetching or provides action callbacks, and a view component that purely handles presentation.
+Modify the seat selector component to display all seats (both available and reserved) with visual status indicators, disabling unavailable seats while showing their status with distinct coloring.
 
-## Types
+The current implementation uses `getAvailableSeats()` which queries ONLY available seats from the database (filtering at the query level). This plan will:
+- Create a new query function to fetch ALL seats regardless of status
+- Display all seats in the grid layout
+- Show status badges/labels for each seat (Available, Reserved, Sold)
+- Apply distinct red/orange styling to reserved/sold seats
+- Disable interaction on reserved/sold seats while keeping available seats selectable
+- Maintain the current seat selection functionality for available seats
 
-Type definitions for the new loader/view component separation pattern.
+This improves user experience by showing the complete seating layout, giving users context about seat availability and the overall venue structure.
 
-### New Hook Return Types
+## [Types]
 
-```typescript
-// For seat selection functionality
-interface UseSeatSelectionReturn {
-  selectedSection: SeatingSection | null
-  availableSeats: Ticket[]
-  selectedSeats: string[]
-  loading: boolean
-  reserving: boolean
-  purchasing: boolean
-  error: string | null
-  reservedTicketIds: string[]
-  totalPrice: number
-  reservedTotalPrice: number
-  setSelectedSection: (section: SeatingSection | null) => void
-  handleSeatToggle: (seatId: string) => void
-  handleReserve: () => Promise<void>
-  handlePurchase: () => Promise<void>
-}
+Extend and clarify seat-related type definitions to explicitly include seat status information.
 
-// For authentication forms
-interface UseAuthFormReturn {
-  state: ApiResponse<any> | null
-  isPending: boolean
-  formAction: (formData: FormData) => void
-}
-```
+### Type System Enhancements
 
-### New Props Interfaces
+1. **Seat Status Type** (in `types/index.ts`)
+   - Currently Ticket type has `status` field
+   - Ensure consistent handling of status values: 'available', 'reserved', 'sold', 'pending'
 
-```typescript
-// View component props
-interface SeatSelectorViewProps {
-  eventId: string
-  sections: SeatingSection[]
-  selectedSection: SeatingSection | null
-  availableSeats: Ticket[]
-  selectedSeats: string[]
-  loading: boolean
-  reserving: boolean
-  purchasing: boolean
-  error: string | null
-  reservedTicketIds: string[]
-  totalPrice: number
-  reservedTotalPrice: number
-  onSectionSelect: (section: SeatingSection) => void
-  onSeatToggle: (seatId: string) => void
-  onReserve: () => void
-  onPurchase: () => void
-}
+2. **Seat Selection Hook Return Type** (in `hooks/use-seat-selection.ts`)
+   - Add `allSeats` property to return ALL seat objects (not just available)
+   - Add `seatStatusMap` property: `Record<string, Ticket>` to track seat status by seat number
+   - Maintain `availableSeats` for backward compatibility
+   - Maintain `selectedSeats` for current selection state
 
-interface LoginFormViewProps {
-  state: ApiResponse<{ userId: string }> | null
-  isPending: boolean
-  formAction: (formData: FormData) => void
-}
+## [Files]
 
-interface RegisterFormViewProps {
-  state: ApiResponse<{ userId: string }> | null
-  isPending: boolean
-  formAction: (formData: FormData) => void
-}
+Create new query function and modify existing component files to support the new seat display functionality.
 
-interface EventsListViewProps {
-  events: EventWithSections[]
-}
+### New Files
+- `ticketing-system/components/tickets/seat-status-badge.tsx` - New component to display seat status labels with appropriate styling
 
-interface EventDetailViewProps {
-  event: EventWithSections
-  user: User | null
-}
+### Modified Files
 
-interface OrdersListViewProps {
-  orders: OrderWithDetails[]
-}
+1. **ticketing-system/actions/ticket-actions.ts**
+   - **CRITICAL**: Add new function `getAllSeats(eventId: string, sectionId: string)` that queries ALL tickets regardless of status
+   - Query: `SELECT * FROM tickets WHERE event_id = $1 AND section_id = $2 ORDER BY seat_number ASC`
+   - This is the KEY change - fetching all seats at the data layer
 
-interface OrderDetailViewProps {
-  order: OrderWithDetails
-}
-```
+2. **ticketing-system/components/tickets/seat-selector-view.tsx**
+   - Change from calling `getAvailableSeats()` to calling `getAllSeats()`
+   - Pass all seats to the SeatSelector component
+   - Update to handle complete seat inventory data
 
-## Files
+3. **ticketing-system/hooks/use-seat-selection.ts**
+   - Receive all seats (not filtered)
+   - Create `seatStatusMap` from all seats for quick lookup
+   - Filter `availableSeats` from all seats for selection logic
+   - Return both `allSeats` and `seatStatusMap` in addition to existing return values
+   - Update selection logic to prevent selection of non-available seats
 
-File modifications required for the refactor.
+4. **ticketing-system/components/tickets/seat-selector.tsx**
+   - Modify to iterate over ALL seats instead of just available ones
+   - Remove any filtering logic
+   - Add status badge rendering for each seat
+   - Apply conditional styling based on seat status (red/orange for reserved/sold)
+   - Add disabled attribute to reserved/sold seats
+   - Prevent click handlers from firing on non-available seats
 
-### New Files to Create
+5. **ticketing-system/app/globals.css**
+   - Add CSS classes for reserved seat styling (red/orange background or border)
+   - Add CSS classes for sold seat styling (darker red or different indicator)
+   - Add CSS classes for disabled seat appearance (cursor: not-allowed, reduced opacity)
+   - Add CSS classes for available seat styling (highlight on hover, blue when selected)
 
-- `ticketing-system/hooks/use-seat-selection.ts` - Custom hook managing seat selection state and actions
-- `ticketing-system/hooks/use-auth-form.ts` - Custom hook for authentication form actions
-- `ticketing-system/components/tickets/seat-selector-view.tsx` - Pure view component for seat selection
-- `ticketing-system/components/auth/login-form-view.tsx` - Pure view component for login form
-- `ticketing-system/components/auth/register-form-view.tsx` - Pure view component for registration form
-- `ticketing-system/components/events/events-list-view.tsx` - Pure view component for events list
-- `ticketing-system/components/events/event-detail-view.tsx` - Pure view component for event detail
-- `ticketing-system/components/orders/orders-list-view.tsx` - Pure view component for orders list
-- `ticketing-system/components/orders/order-detail-view.tsx` - Pure view component for order detail
-- `ticketing-system/loaders/events-loader.ts` - Server-side data loader for events
-- `ticketing-system/loaders/orders-loader.ts` - Server-side data loader for orders
+### No Deletion
+- All existing files remain; only modifications and additions occur
+- Keep `getAvailableSeats()` function for backward compatibility if needed elsewhere
 
-### Files to Modify
+## [Functions]
 
-- `ticketing-system/components/tickets/seat-selector.tsx` - Convert to container component using the hook
-- `ticketing-system/app/login/page.tsx` - Simplify to use loader hook and view component
-- `ticketing-system/app/register/page.tsx` - Simplify to use loader hook and view component
-- `ticketing-system/app/events/page.tsx` - Simplify to use loader and view component
-- `ticketing-system/app/events/[id]/page.tsx` - Simplify to use loader and view component
-- `ticketing-system/app/orders/page.tsx` - Simplify to use loader and view component
-- `ticketing-system/app/orders/[id]/page.tsx` - Simplify to use loader and view component
+Create new data fetching functions and modify existing functions to support displaying all seats.
 
-### Files to Delete
+### New Functions
 
-None - all existing files will be refactored rather than replaced.
+1. **getAllSeats()** (in `actions/ticket-actions.ts`)
+   - **Purpose**: Fetch ALL tickets for a section regardless of status
+   - **Signature**: `async getAllSeats(eventId: string, sectionId: string): Promise<Ticket[]>`
+   - **Query**: 
+     ```sql
+     SELECT * FROM tickets 
+     WHERE event_id = $1 AND section_id = $2 
+     ORDER BY seat_number ASC
+     ```
+   - **Returns**: Array of all Ticket objects with their current status
 
-## Functions
+2. **buildSeatStatusMap()** (in `hooks/use-seat-selection.ts`)
+   - **Purpose**: Create a lookup map of seat number to ticket object
+   - **Signature**: `(tickets: Ticket[]) => Record<string, Ticket>`
+   - **Logic**: Reduce tickets array into object keyed by seat_number
+   - **Returns**: Object mapping seat numbers to their ticket objects
 
-Function-level changes across the codebase.
-
-### New Hook Functions
-
-**ticketing-system/hooks/use-seat-selection.ts**
-- `useSeatSelection(eventId: string, sections: SeatingSection[], userId: string): UseSeatSelectionReturn` - Manages all seat selection state, loads available seats, handles reservations and purchases
-
-**ticketing-system/hooks/use-auth-form.ts**
-- `useLoginForm(): UseAuthFormReturn` - Wraps login action with useActionState and router redirect
-- `useRegisterForm(): UseAuthFormReturn` - Wraps register action with useActionState and router redirect
-
-### New Loader Functions
-
-**ticketing-system/loaders/events-loader.ts**
-- `loadUpcomingEvents(): Promise<EventWithSections[]>` - Server function to load upcoming events
-- `loadEventById(id: string): Promise<EventWithSections | null>` - Server function to load event by ID
-
-**ticketing-system/loaders/orders-loader.ts**
-- `loadUserOrders(): Promise<OrderWithDetails[]>` - Server function to load user's orders
-- `loadOrderById(id: string): Promise<OrderWithDetails | null>` - Server function to load order by ID
+3. **SeatStatusBadge Component** (in `components/tickets/seat-status-badge.tsx`)
+   - **Purpose**: Display status label for each seat
+   - **Props**: `{ status: 'available' | 'reserved' | 'sold' | 'pending' }`
+   - **Renders**: Small badge/label with appropriate styling and text
 
 ### Modified Functions
 
-**ticketing-system/components/tickets/seat-selector.tsx**
-- `SeatSelector()` - Becomes a simple container that uses the hook and renders the view component
+1. **useSeatSelection()** (in `hooks/use-seat-selection.ts`)
+   - **Current behavior**: Receives availableSeats only
+   - **New behavior**: Receives allSeats, builds seatStatusMap
+   - **New return values**: 
+     - `allSeats: Ticket[]` - All seats for rendering
+     - `seatStatusMap: Record<string, Ticket>` - Quick status lookup
+     - `availableSeats: Ticket[]` - Filtered available seats (derived from allSeats)
+     - `selectedSeats: string[]` - Currently selected seat numbers (existing)
+     - `toggleSeat: (seatNumber: string) => void` - Selection handler (existing)
+   - **Updated logic**: Filter availableSeats from allSeats where status === 'available'
 
-**ticketing-system/app/login/page.tsx**
-- `LoginPage()` - Becomes a simple container using the hook and view component
+2. **toggleSeat handler** (in `hooks/use-seat-selection.ts`)
+   - Add validation: Check if seat is available before allowing selection
+   - Prevent selection of reserved/sold seats
 
-**ticketing-system/app/register/page.tsx**
-- `RegisterPage()` - Becomes a simple container using the hook and view component
+3. **Seat rendering logic** (in `seat-selector.tsx`)
+   - Change from mapping over `availableSeats` to mapping over `allSeats`
+   - Add conditional checks for seat status to apply appropriate styling
+   - Add disabled attribute based on seat status
+   - Add onClick guard to prevent interaction with non-available seats
 
-**ticketing-system/app/events/page.tsx**
-- `EventsPage()` - Becomes a simple server component using loader and view
+## [Classes]
 
-**ticketing-system/app/events/[id]/page.tsx**
-- `EventDetailPage()` - Becomes a simple server component using loader and view
+Introduce new component class structures for modular seat rendering.
 
-**ticketing-system/app/orders/page.tsx**
-- `OrdersPage()` - Becomes a simple server component using loader and view
+### New Components
 
-**ticketing-system/app/orders/[id]/page.tsx**
-- `OrderDetailPage()` - Becomes a simple server component using loader and view
+1. **SeatStatusBadge** (in `seat-status-badge.tsx`)
+   - **Props Interface**: 
+     ```typescript
+     interface SeatStatusBadgeProps {
+       status: 'available' | 'reserved' | 'sold' | 'pending'
+     }
+     ```
+   - **Styling**: Different colors/badges based on status
+     - Available: Green or blue badge
+     - Reserved: Orange/yellow badge (user preference: distinct color)
+     - Sold: Red badge
+     - Pending: Gray badge
+   - **Text**: Display status as readable text
 
-## Classes
+### Modified Components
 
-No class-level changes required - this is a functional component refactor.
+1. **Seat Button Rendering** (in `seat-selector.tsx`)
+   - Add conditional className based on seat status
+   - Apply red/orange styling for reserved seats
+   - Apply darker red for sold seats
+   - Add disabled attribute for non-available seats
+   - Include SeatStatusBadge component in rendering
+   - Structure:
+     ```tsx
+     <button
+       className={cn(
+         "base-seat-styles",
+         status === 'available' && "available-seat-styles",
+         status === 'reserved' && "reserved-seat-styles",
+         status === 'sold' && "sold-seat-styles",
+         isSelected && "selected-seat-styles"
+       )}
+       disabled={status !== 'available'}
+       onClick={() => status === 'available' && toggleSeat(seatNumber)}
+     >
+       {seatNumber}
+       <SeatStatusBadge status={status} />
+     </button>
+     ```
 
-## Dependencies
+## [Dependencies]
 
-No new external dependencies required. The refactor uses existing Next.js and React patterns:
-- React hooks (useState, useEffect, useActionState)
-- Next.js server components and actions
-- Existing action functions remain unchanged
+No new package dependencies are required. The implementation uses existing React, TypeScript, and styling capabilities already present in the project.
 
-## Testing
+### Existing Dependencies Utilized
+- React for component rendering
+- TypeScript for type safety
+- PostgreSQL for database queries
+- CSS for styling
+- Server Actions pattern for data fetching
 
-Testing approach for the refactored components.
+## [Testing]
 
-### Hook Testing
-- Test `useSeatSelection` hook with React Testing Library
-- Test `useAuthForm` hooks with various action states
-- Verify state management and callback behavior
+Verify the seat selector displays all seats with correct statuses and interactivity.
 
-### View Component Testing
-- Test all view components render correctly with mock props
-- Test user interactions call provided callbacks
-- Test conditional rendering based on props
-- Verify no direct API calls in view components
+### Manual Testing Steps
 
-### Integration Testing
-- Test container components properly wire up loaders and views
-- Test data flow from server components through loaders to views
-- Verify client component containers properly use hooks and views
+1. **Data Verification**
+   - Check that `getAllSeats()` returns all tickets including reserved and sold ones
+   - Verify the query includes all statuses
 
-### Manual Testing
-- Test complete user flows (browse events, select seats, purchase)
-- Verify authentication flows work correctly
-- Test order viewing and details
-- Ensure all error states display properly
+2. **UI Display**
+   - Navigate to event detail page with ticket selection
+   - Verify all seats are visible in the grid (no hidden seats)
+   - Count total seats displayed vs expected total
 
-## Implementation Order
+3. **Available Seat Interaction**
+   - Verify available seats are clickable and selectable
+   - Verify selection state toggles correctly
+   - Verify selected seats show distinct styling
 
-Step-by-step implementation sequence to minimize conflicts.
+4. **Reserved/Sold Seat Display**
+   - Verify reserved seats are displayed with red/orange styling (user preference)
+   - Verify sold seats are displayed with appropriate styling
+   - Verify status badges are visible and correct
 
-1. **Create type definitions**
-   - Add new interfaces to `ticketing-system/types/index.ts`
-   - Define all hook return types and view component props
+5. **Disabled Seat Interaction**
+   - Verify reserved seats cannot be clicked/selected
+   - Verify sold seats cannot be clicked/selected
+   - Verify cursor changes to "not-allowed" on hover
 
-2. **Create server-side loaders**
-   - Create `loaders/events-loader.ts` with event loading functions
-   - Create `loaders/orders-loader.ts` with order loading functions
-   - Extract data fetching logic from page components
+6. **Selection Logic**
+   - Attempt to select reserved/sold seats - should not work
+   - Verify only available seats can be added to selection
+   - Verify selection state persists correctly
 
-3. **Create authentication hooks**
-   - Create `hooks/use-auth-form.ts`
-   - Implement `useLoginForm` hook
-   - Implement `useRegisterForm` hook
+### Edge Cases to Test
 
-4. **Create authentication view components**
-   - Create `components/auth/login-form-view.tsx`
-   - Create `components/auth/register-form-view.tsx`
-   - Extract pure presentation logic from auth pages
+- Event with all seats reserved/sold
+- Event with all seats available
+- Event with partial reservation (mix of statuses)
+- Multi-section seating
+- Events with large number of seats (performance)
+- Expired reservations (status transitions)
 
-5. **Refactor authentication pages**
-   - Update `app/login/page.tsx` to use hook and view
-   - Update `app/register/page.tsx` to use hook and view
-   - Test authentication flows
+### Database Testing
 
-6. **Create events view components**
-   - Create `components/events/events-list-view.tsx`
-   - Create `components/events/event-detail-view.tsx`
-   - Extract presentation logic from events pages
+```sql
+-- Verify query returns all seats
+SELECT * FROM tickets 
+WHERE event_id = 'test-event-id' AND section_id = 'test-section-id' 
+ORDER BY seat_number ASC;
 
-7. **Refactor events pages**
-   - Update `app/events/page.tsx` to use loader and view
-   - Update `app/events/[id]/page.tsx` to use loader and view
-   - Test events browsing and detail viewing
+-- Check different statuses exist
+SELECT status, COUNT(*) FROM tickets 
+WHERE event_id = 'test-event-id' 
+GROUP BY status;
+```
 
-8. **Create orders view components**
-   - Create `components/orders/orders-list-view.tsx`
-   - Create `components/orders/order-detail-view.tsx`
-   - Extract presentation logic from orders pages
+## [Implementation Order]
 
-9. **Refactor orders pages**
-   - Update `app/orders/page.tsx` to use loader and view
-   - Update `app/orders/[id]/page.tsx` to use loader and view
-   - Test orders viewing
+Execute changes in this sequence to minimize conflicts and ensure proper integration.
 
-10. **Create seat selection hook**
-    - Create `hooks/use-seat-selection.ts`
-    - Implement all state management and action handlers
-    - Test hook in isolation
+1. **Add `getAllSeats()` function** in `actions/ticket-actions.ts`
+   - This is the CRITICAL first step - changes data layer
+   - Write query to fetch all tickets regardless of status
+   - Export the new function
 
-11. **Create seat selector view component**
-    - Create `components/tickets/seat-selector-view.tsx`
-    - Extract all presentation logic from seat-selector
-    - Ensure no API calls in view
+2. **Update `seat-selector-view.tsx`** to use new data function
+   - Change from `getAvailableSeats()` to `getAllSeats()`
+   - Pass all seats to child components
 
-12. **Refactor seat selector container**
-    - Update `components/tickets/seat-selector.tsx` to use hook and view
-    - Wire up all callbacks properly
-    - Test complete seat selection flow
+3. **Create helper function `buildSeatStatusMap()`** in `hooks/use-seat-selection.ts`
+   - Maps seat numbers to ticket objects for quick lookup
 
-13. **Final integration testing**
-    - Test all user flows end-to-end
-    - Verify no regressions in functionality
-    - Ensure all error states work correctly
-    - Verify loading states display properly
+4. **Update `useSeatSelection()` hook** in `hooks/use-seat-selection.ts`
+   - Receive all seats instead of filtered seats
+   - Build seatStatusMap
+   - Filter availableSeats from allSeats
+   - Return allSeats and seatStatusMap
+   - Add guard in toggleSeat to prevent non-available selection
+
+5. **Create `SeatStatusBadge` component** in `components/tickets/seat-status-badge.tsx`
+   - Simple component to render status badges
+   - Conditional styling based on status prop
+
+6. **Add CSS styling** in `app/globals.css`
+   - Reserved seat styles (red/orange per user preference)
+   - Sold seat styles
+   - Disabled seat styles (cursor, opacity)
+   - Available seat styles (hover, selection)
+
+7. **Modify `seat-selector.tsx`** component
+   - Change from mapping over availableSeats to allSeats
+   - Add conditional styling based on seat status
+   - Include SeatStatusBadge in seat rendering
+   - Add disabled attribute logic
+   - Add onClick guard to prevent interaction with non-available seats
+
+8. **Test complete flow**
+   - Verify data fetching returns all seats
+   - Verify UI displays all seats correctly
+   - Verify status indicators are correct
+   - Verify interaction is properly restricted
+
+9. **Edge case testing**
+   - Test with different event/section combinations
+   - Verify expired reservations show correctly
+   - Test performance with many seats
+
+10. **Final styling adjustments**
+    - Fine-tune colors and spacing
+    - Ensure accessibility (contrast ratios, focus indicators)
+    - Verify responsive behavior

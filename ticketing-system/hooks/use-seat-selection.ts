@@ -2,8 +2,28 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { getAvailableSeats, reserveTickets, purchaseTickets } from '@/actions/ticket-actions'
+import { getAllSeats, reserveTickets, purchaseTickets } from '@/actions/ticket-actions'
 import type { SeatingSection, Ticket, UseSeatSelectionReturn } from '@/types'
+
+/**
+ * Builds a map of seat ID to status for quick lookup
+ */
+function buildSeatStatusMap(seats: Ticket[]): Map<string, Ticket['status']> {
+  const statusMap = new Map<string, Ticket['status']>()
+  
+  for (const seat of seats) {
+    // Check if reservation has expired (>5 minutes old)
+    const isExpiredReservation = 
+      seat.status === 'reserved' && 
+      seat.reserved_at && 
+      new Date(seat.reserved_at).getTime() < Date.now() - 5 * 60 * 1000
+    
+    // Treat expired reservations as available
+    statusMap.set(seat.id, isExpiredReservation ? 'available' : seat.status)
+  }
+  
+  return statusMap
+}
 
 /**
  * Hook for managing seat selection state and actions
@@ -16,7 +36,8 @@ export function useSeatSelection(
 ): UseSeatSelectionReturn {
   const router = useRouter()
   const [selectedSection, setSelectedSection] = useState<SeatingSection | null>(null)
-  const [availableSeats, setAvailableSeats] = useState<Ticket[]>([])
+  const [allSeats, setAllSeats] = useState<Ticket[]>([])
+  const [seatStatusMap, setSeatStatusMap] = useState<Map<string, Ticket['status']>>(new Map())
   const [selectedSeats, setSelectedSeats] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [reserving, setReserving] = useState(false)
@@ -24,21 +45,22 @@ export function useSeatSelection(
   const [error, setError] = useState<string | null>(null)
   const [reservedTicketIds, setReservedTicketIds] = useState<string[]>([])
 
-  // Load available seats when section is selected
+  // Load all seats when section is selected
   useEffect(() => {
     if (selectedSection) {
-      loadAvailableSeatsAsync(selectedSection.id)
+      loadAllSeatsAsync(selectedSection.id)
     }
   }, [selectedSection])
 
-  const loadAvailableSeatsAsync = async (sectionId: string) => {
+  const loadAllSeatsAsync = async (sectionId: string) => {
     setLoading(true)
     setError(null)
     try {
-      const seats = await getAvailableSeats(eventId, sectionId)
-      setAvailableSeats(seats)
+      const seats = await getAllSeats(eventId, sectionId)
+      setAllSeats(seats)
+      setSeatStatusMap(buildSeatStatusMap(seats))
     } catch (err) {
-      setError('Failed to load available seats')
+      setError('Failed to load seats')
       console.error(err)
     } finally {
       setLoading(false)
@@ -46,8 +68,16 @@ export function useSeatSelection(
   }
 
   const handleSeatToggle = (seatId: string) => {
+    // Prevent toggling if there are already reserved tickets
     if (reservedTicketIds.length > 0) {
       setError('Please complete your current reservation or wait for it to expire')
+      return
+    }
+
+    // Prevent selection of non-available seats
+    const seatStatus = seatStatusMap.get(seatId)
+    if (seatStatus !== 'available') {
+      setError('This seat is not available for selection')
       return
     }
 
@@ -81,14 +111,14 @@ export function useSeatSelection(
           setTimeout(() => {
             setReservedTicketIds([])
             if (selectedSection) {
-              loadAvailableSeatsAsync(selectedSection.id)
+              loadAllSeatsAsync(selectedSection.id)
             }
           }, 5 * 60 * 1000)
         }
 
-        // Refresh available seats
+        // Refresh all seats
         if (selectedSection) {
-          await loadAvailableSeatsAsync(selectedSection.id)
+          await loadAllSeatsAsync(selectedSection.id)
         }
       } else {
         setError(result.error || 'Failed to reserve seats')
@@ -137,7 +167,8 @@ export function useSeatSelection(
 
   return {
     selectedSection,
-    availableSeats,
+    allSeats,
+    seatStatusMap,
     selectedSeats,
     loading,
     reserving,
