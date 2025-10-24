@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS seating_sections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   section_name VARCHAR(100) NOT NULL,
-  price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
+  price DOUBLE PRECISION NOT NULL CHECK (price >= 0),
   total_seats INTEGER NOT NULL CHECK (total_seats > 0),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

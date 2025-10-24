@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
-  price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
+  price DOUBLE PRECISION NOT NULL CHECK (price >= 0),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(ticket_id)
 );
