@@ -52,7 +52,7 @@ cd ticketing-system
 
 2. **Install dependencies**
 ```bash
-npm install --legacy-peer-deps
+pnpm install
 ```
 
 3. **Start PostgreSQL**
@@ -72,7 +72,7 @@ All migrations have been run successfully including seed data.
 
 5. **Start development server**
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 6. **Open browser and login**

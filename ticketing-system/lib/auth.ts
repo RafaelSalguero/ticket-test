@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 import { cookies } from 'next/headers'
 import { query } from './db'
 import type { User } from '@/types'
@@ -48,7 +48,7 @@ export async function getCurrentUser(): Promise<User | null> {
 
   try {
     const result = await query<User>(
-      'SELECT id, email, first_name, last_name, created_at, updated_at FROM users WHERE id = $1',
+      'SELECT id, email, first_name, last_name, role, created_at, updated_at FROM users WHERE id = $1',
       [userId]
     )
     

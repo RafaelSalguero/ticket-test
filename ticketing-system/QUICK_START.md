@@ -12,7 +12,7 @@ nvm use
 docker-compose up -d postgres
 
 # Start Next.js
-npm run dev
+pnpm run dev
 ```
 
 > **Note:** The `.nvmrc` file specifies Node.js 22 (lts/jod) to match the Dockerfile. Run `nvm use` to automatically switch to this version.
